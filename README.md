@@ -135,7 +135,7 @@ Just top up. No auto-renewal, no hidden charges.
 **You don't have to — updates are automatic by default.** Your MCP config uses `npx -y @agentkey/mcp`, which re-resolves to the latest published version every time your agent restarts. In Claude Code plugin mode, AgentKey also checks GitHub Releases at runtime and applies a silent in-place update, notifying you:
 
 ```
-Claude: AgentKey Skill updated to v0.4.5.
+Claude: AgentKey Skill updated to v1.1.0.
 ```
 
 **If you'd rather force it manually:**
