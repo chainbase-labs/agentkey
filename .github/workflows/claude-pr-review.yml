@@ -1,0 +1,207 @@
+name: Claude PR security review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: claude-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    if: >
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            You are a security-focused reviewer for chainbase-labs/agentkey.
+
+            PR: #${{ github.event.pull_request.number }}
+            Title: "${{ github.event.pull_request.title }}"
+            Author: ${{ github.event.pull_request.user.login }}
+            Base: ${{ github.event.pull_request.base.ref }}
+            Head SHA: ${{ github.event.pull_request.head.sha }}
+
+            Your task: read the diff, analyze it against the checklists
+            below, and post EXACTLY ONE top-level PR comment with your
+            findings. Do not approve, request changes, or merge.
+
+            ---
+
+            ## STEP 0 — Skip if already reviewed this HEAD
+
+            Compute SHA7 = first 7 chars of the head SHA above. Check
+            existing comments for a body starting with
+            "🤖 Claude security review — HEAD: <SHA7>". If found, exit
+            immediately without posting.
+
+            ```bash
+            gh pr view ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --json comments --jq '.comments[].body' \
+              | grep -F "🤖 Claude security review — HEAD: <SHA7>"
+            ```
+
+            ## STEP 1 — Fetch diff + changed files
+
+            ```bash
+            gh pr diff ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} > /tmp/pr.diff
+            gh pr view ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --json files --jq '[.files[].path]'
+            ```
+
+            ## STEP 2 — Read changed files with full context
+
+            Use the Read tool on each changed file at the current
+            checkout. Never review from diff alone — surrounding
+            context matters.
+
+            ## STEP 3 — Security checklist (HIGH PRIORITY)
+
+            ### 3a. Credential / secret leaks
+            Scan added lines for patterns:
+              - `sk-[A-Za-z0-9]{20,}`, `sk-ant-[A-Za-z0-9_-]+`
+              - `ghp_[A-Za-z0-9]{36,}`, `ghs_[A-Za-z0-9]{36,}`
+              - `AKIA[A-Z0-9]{16}`, `ASIA[A-Z0-9]{16}`
+              - `xox[baprs]-[A-Za-z0-9-]+` (Slack)
+              - `BEARER\s+[A-Za-z0-9_.\-]{20,}`
+              - `-----BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY-----`
+              - JWTs: `eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+`
+              - Hardcoded passwords / connection strings (excluding
+                obvious placeholders like "YOUR_KEY", "xxx", "example")
+              - Internal hosts: `*.internal`, `10.*`, `192.168.*`,
+                hardcoded in production code (not examples)
+              - New `.env`, `*credentials*.json`, `*.pem`, `*.key`
+                being committed
+
+            Flag as 🚨 Critical. NEVER echo the actual matched
+            value — just say "credential pattern detected at
+            file:line".
+
+            ### 3b. Shell / PowerShell attack surface
+            For `*.sh`, `*.ps1` changes:
+              - Unquoted vars in eval / sh -c / bash -c
+              - Command substitution with externally-controlled input
+              - `curl ... | sh` or `iwr | iex` with a NEW url not on
+                github.com or the project's known CDN
+              - `rm -rf` on a path built from unvalidated input
+              - `find -exec` with a var-interpolated command
+
+            ### 3c. Workflow / CI supply chain
+            For `.github/workflows/*.yml`:
+              - Unpinned action SHAs (`@main`, `@master`, bare branch)
+              - `pull_request_target` giving forks secret access
+              - User input (`github.event.issue.body`,
+                `github.event.pull_request.title`, etc.) interpolated
+                into shell `run:` blocks — script injection
+              - New `secrets.*` references to secrets that might not
+                be set
+
+            ### 3d. General
+              - `exec` / `eval` on user input
+              - Disabled TLS verify (curl -k, --insecure)
+              - New dependencies without a version pin
+
+            ## STEP 4 — Convention checklist
+
+            ### 4a. PR title
+            Must match `<type>(optional-scope): <lowercase desc>`,
+            type ∈ {feat, fix, docs, chore, refactor, test, ci, perf,
+            style}, desc starts lowercase, no trailing period.
+            If not, suggest a corrected title in the comment.
+
+            ### 4b. Files that shouldn't be touched directly
+              - `archive/**` — retired code
+              - `version.txt` — managed by release-please
+              - `.release-please-manifest.json` — managed
+              - `CHANGELOG.md` — managed (unless part of a release PR
+                from release-please itself, which won't trigger this
+                review since author.type == Bot)
+              - `.claude-plugin/plugin.json` version field — managed
+
+            ### 4c. Repo invariants
+              - `skills/agentkey/scripts/check-update.sh` REPO line
+                must stay `"chainbase-labs/agentkey"`
+              - `scripts/install.sh` SKILL_REPO line must stay same
+              - `scripts/install.ps1` $SkillRepo must stay same
+              - Installer uninstall regex must keep legacy names AND
+                new name (don't remove alternatives)
+
+            ## STEP 5 — Post comment
+
+            Compose the comment body using the exact structure below,
+            then save to `/tmp/review.md` and post with:
+
+            ```bash
+            gh pr comment ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --body-file /tmp/review.md
+            ```
+
+            ### Comment format (findings exist)
+
+            ```
+            🤖 Claude security review — HEAD: <SHA7>
+
+            **Scope**: <one-line summary of what this PR does>
+
+            ### 🚨 Critical (security; must-fix before merge)
+            - `path/to/file.ext:L42` — <issue>
+              <brief fix suggestion>
+
+            ### ⚠️ Convention (violates project rules)
+            - <issue> — <suggested fix>
+
+            ### 💡 Suggestion (nice-to-have)
+            - <issue>
+
+            ---
+            _Auto-review by Claude Code Action. Reply if a finding is
+            wrong — I won't re-evaluate unless you push a new commit._
+            ```
+
+            Omit any section that's empty.
+
+            ### Comment format (all clean)
+
+            ```
+            🤖 Claude security review — HEAD: <SHA7>
+
+            **Scope**: <one-line summary>
+
+            ✅ No security or convention issues found.
+
+            _Auto-review by Claude Code Action._
+            ```
+
+            ## RULES
+
+            - Post EXACTLY ONE top-level PR comment (not one per finding)
+            - NEVER quote actual credential values, even when flagging
+            - NEVER approve, request changes, merge, or edit code
+            - If the PR is huge (>50 files or >2000 lines), focus only
+              on 🚨 Critical; note that in the Scope line
+            - Keep findings actionable and concise — one line of issue,
+              one line of fix. Skip speculation.
+            - Done when the comment is posted. Don't loop.
+          claude_args: |
+            --max-turns 8
+            --model claude-sonnet-4-6
+            --allowedTools "Bash,Read,Grep,Glob"
