@@ -67,3 +67,4 @@ When conventional commits accumulate on `main`, release-please opens a "Release 
 Use the [issue templates](https://github.com/chainbase-labs/agentkey/issues/new/choose).
 
 For security issues, **do not open a public issue**. Email `support@chainbase.com` — see [SECURITY.md](SECURITY.md).
+
