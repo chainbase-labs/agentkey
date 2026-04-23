@@ -56,7 +56,7 @@ Now: one AgentKey handles everything. **AgentKey unifies all the external access
 
 ## Install
 
-One command. A browser tab opens for login, then you're done.
+One command. A browser tab opens for login, then you're done. The installer auto-detects every agent on your machine ([40+ supported](https://github.com/vercel-labs/skills#available-agents). Common examples include Claude Code, Codex, Gemini CLI, and Cursor CLI, etc.) and configures each one.
 
 **macOS / Linux**
 ```bash
@@ -72,7 +72,7 @@ Restart your agent, then ask it something that needs the internet:
 
 > *"What has Musk been tweeting about lately?"*
 
-That's it. No API key to copy, no JSON to edit. The installer auto-detects every agent on your machine ([40+ supported](https://github.com/vercel-labs/skills#available-agents)) and configures each one.
+That's it. No API key to copy, no JSON to edit. 
 
 <sub>Need to target specific agents or run in CI? → See the "Advanced install options" item in the [FAQ](#faq).</sub>
 
