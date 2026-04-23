@@ -317,7 +317,7 @@ agentkey/
 <details>
 <summary><b>怎么获取帮助 / 反馈 bug / 关注更新？</b></summary>
 
-- **Telegram：** [t.me/agentkey33](https://t.me/agentkey33) —— 通用咨询、支持、需求反馈
+- **Telegram：** [t.me/AgentKey_Official](https://t.me/AgentKey_Official) —— 通用咨询、支持、需求反馈
 - **问题反馈：** [GitHub Issues](https://github.com/chainbase-labs/agentkey/issues)
 - **发布公告：** ⭐ Star 本项目即可在有新版本时收到通知
 

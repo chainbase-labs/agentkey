@@ -317,7 +317,7 @@ Early access. There are rough edges and we appreciate your patience. Feature req
 <details>
 <summary><b>Where do I get help / report bugs / follow updates?</b></summary>
 
-- **Telegram:** [t.me/agentkey33](https://t.me/agentkey33) — general questions, support, feature requests
+- **Telegram:** [t.me/AgentKey_Official](https://t.me/AgentKey_Official) — general questions, support, feature requests
 - **Bug reports:** [GitHub Issues](https://github.com/chainbase-labs/agentkey/issues)
 - **Release announcements:** ⭐ star this repo to get notified
 
