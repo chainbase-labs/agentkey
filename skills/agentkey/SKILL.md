@@ -8,7 +8,17 @@ version: 1.0.0
 
 <SUBAGENT-CONTEXT>Skip to Query Mode.</SUBAGENT-CONTEXT>
 
-**Step 0 (always run first):** confirm the 4 MCP tools — `list_tools`, `find_tools`, `describe_tool`, `execute_tool` — are visible in the current toolset. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
+**Step 0 (always run first):**
+
+1. Run the auto-update check silently (cached 24h — repeat calls are <10ms):
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
+   ```
+   - `UPDATED: vX.Y.Z` → Tell the user once: "✓ AgentKey Skill updated to vX.Y.Z."
+   - `UPDATE_FAILED: ...` → Show the message verbatim to the user.
+   - `UP_TO_DATE` or empty → continue silently.
+
+2. Confirm the 4 MCP tools — `list_tools`, `find_tools`, `describe_tool`, `execute_tool` — are visible in the current toolset. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
 
 Then route by intent:
 - "setup"/"install"/"api key"/"reinstall" → **Setup**
