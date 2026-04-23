@@ -9,7 +9,7 @@ CACHE_TTL_FAILURE=3600    # 1h for UPDATE_FAILED (retry sooner)
 CURL_TIMEOUT=3
 
 PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd)}"
-VERSION_FILE="$PLUGIN_ROOT/version"
+VERSION_FILE="$PLUGIN_ROOT/version.txt"
 CACHE_FILE="${TMPDIR:-/tmp}/agentkey-update-check"
 
 LOCAL_VERSION=$(tr -d '[:space:]' < "$VERSION_FILE" 2>/dev/null)
