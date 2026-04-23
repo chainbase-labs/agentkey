@@ -68,11 +68,18 @@ jobs:
               --json files --jq '[.files[].path]'
             ```
 
-            ## STEP 2 — Read changed files with full context
+            ## STEP 2 — Read changed files (selective)
 
-            Use the Read tool on each changed file at the current
-            checkout. Never review from diff alone — surrounding
-            context matters.
+            Count the changed files.
+              - If ≤ 15 files: use the Read tool on each file for full
+                context before analyzing.
+              - If > 15 files: review from the diff alone. Only Read a
+                specific file if the diff is ambiguous without more
+                context for a suspected Critical finding. Announce in
+                the comment Scope line: "Large PR — diff-only review."
+
+            Never read files under `skills/agentkey/references/`,
+            `*.lock`, `*-lock.json`, generated or vendored content.
 
             ## STEP 3 — Security checklist (HIGH PRIORITY)
 
@@ -203,6 +210,6 @@ jobs:
               one line of fix. Skip speculation.
             - Done when the comment is posted. Don't loop.
           claude_args: |
-            --max-turns 8
+            --max-turns 20
             --model claude-sonnet-4-6
             --allowedTools "Bash,Read,Grep,Glob"
