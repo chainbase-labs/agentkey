@@ -18,6 +18,7 @@
 
 <p align="center">
   <a href="https://agentkey.app"><img src="https://img.shields.io/badge/Website-agentkey.app-blue?style=for-the-badge" alt="Website" /></a>
+  <a href="https://console.agentkey.app"><img src="https://img.shields.io/badge/Console-console.agentkey.app-7c3aed?style=for-the-badge" alt="Console" /></a>
 </p>
 
 ---
@@ -51,6 +52,17 @@ Before AgentKey: 10 tasks → 10 API keys → 10 separate bills.
 Your agent is half-capable at best, constantly needing human help to find data, juggling credentials, drowning in complexity.
 
 Now: one AgentKey handles everything. **AgentKey unifies all the external access your AI needs to do real work.**
+
+---
+
+## New here? Start on the web
+
+Before touching the terminal, you can get a feel for AgentKey directly in your browser — the website and console explain things more visually than this README can.
+
+- 🌐 **[agentkey.app](https://agentkey.app)** — Product overview, supported platforms, live demos, pricing details
+- 🎛️ **[console.agentkey.app](https://console.agentkey.app)** — Sign up, top up credits, manage your API key, track usage
+
+The one-line install below is what plugs AgentKey into your AI agent. If you only want to look around first, the two links above are the friendlier starting point.
 
 ---
 
