@@ -218,21 +218,32 @@ npx skills remove chainbase-labs/agentkey
 <details>
 <summary><b>进阶安装（CI / 指定 Agent / 手动两步）</b></summary>
 
+安装器会自动探测本机已安装的 AI Agent（依据 [vercel-labs/skills 支持列表](https://github.com/vercel-labs/skills) 比对配置目录和命令行工具），自动选中它们 —— 不再弹多选框。需要覆盖时用下面的旗标：
+
 **安装器参数：**
 
 ```bash
 # 非交互模式（CI / 无人值守）：安装到所有检测到的 Agent，不询问
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --yes
 
-# 只安装到指定的 Agent
+# 看一下安装器在本机会自动选中哪些 Agent（看完即退出）
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --list-agents
+
+# 只安装到指定的 Agent（覆盖自动检测结果）
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --only claude-code,cursor
+
+# 跳过我们的检测，让 skills CLI 自己识别全部 Agent
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --all-agents
 
 # 只装 Skill 或只做 MCP 授权
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-mcp
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-skill
+
+# 即使本机已经配置过 AgentKey 也强制重新走一次授权
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --force-mcp
 ```
 
-PowerShell 对应参数：`-Yes`、`-Only`、`-SkipMcp`、`-SkipSkill`。
+PowerShell 对应参数：`-Yes`、`-ListAgents`、`-Only`、`-AllAgents`、`-SkipMcp`、`-SkipSkill`、`-ForceMcp`。
 
 **手动两步安装**（想自己跑两条底层命令，或一键脚本在你的环境里跑不起来）：
 
@@ -244,7 +255,32 @@ npx skills add chainbase-labs/agentkey
 npx -y @agentkey/mcp --auth-login
 ```
 
-在 SSH 远程或无法弹浏览器的终端里，用 `npx -y @agentkey/mcp --setup` —— 交互式向导，问你要 Key 并让你勾选要写入的 MCP 客户端。
+</details>
+
+<details>
+<summary><b>在 SSH / Docker / OpenClaw 远程通道里安装</b></summary>
+
+如果安装命令是在你看不到屏幕的机器上跑（远程 SSH 服务器、Docker 容器、由手机触发的 OpenClaw 运行时），默认 `--auth-login` 会在远端"成功"打开一个你看不见的浏览器，然后你只能盯着 "Waiting for authorization..." 卡死。
+
+安装器会自动识别这种场景，切换到"扫码授权"流程：终端里直接打印授权 URL 加二维码，不再尝试本地开浏览器。**触发条件**（任一命中即判定为远程）：
+
+- `~/.openclaw/` 目录存在（OpenClaw 运行时）
+- `$SSH_CONNECTION` / `$SSH_TTY` 已设置
+- Linux 且无 `$DISPLAY` / `$WAYLAND_DISPLAY`
+
+需要强制其中一种模式：
+
+```bash
+# 强制远程模式（URL + 二维码，不开浏览器）
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --remote
+
+# 强制本地模式（自动开浏览器，无视启发式判断）
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
+```
+
+PowerShell：`-Remote` / `-Local`。
+
+如果完全不想走 URL/二维码流程、想自己手动粘 Key，可以用 `npx -y @agentkey/mcp --setup` —— 交互式向导，问你要 Key 并让你勾选要写入的 MCP 客户端。
 
 </details>
 

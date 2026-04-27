@@ -5,6 +5,7 @@
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --yes
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --interactive
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --only claude-code,cursor
+#        curl -fsSL https://agentkey.app/install.sh | bash -s -- --remote
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-mcp
 #
 # The whole procedural body is wrapped in `main()` so that under `curl | bash`
@@ -19,6 +20,37 @@ set -euo pipefail
 SKILL_REPO="chainbase-labs/agentkey"
 MCP_PACKAGE="@agentkey/mcp"
 NODE_MIN_MAJOR=18
+
+# ── Agent markers ─────────────────────────────────────────────────────────
+# Subset of vercel-labs/skills' 45 supported agent IDs that have reliable
+# on-disk markers (config dirs / binaries on PATH). Agents we can't probe
+# cleanly (mostly VS Code extensions like cline/continue/roo) just don't get
+# pre-detected — the user can pass --all-agents or --only to include them.
+# Sync source: https://github.com/vercel-labs/skills (Supported Agents table).
+#
+# Format: <agent-id>|<marker>[,<marker>...]
+#   marker types:  cmd:foo            — `command -v foo`
+#                  path:/abs/or/~path — file or dir exists (~ expands to $HOME)
+AGENT_MARKERS=(
+    "claude-code|path:~/.claude.json,cmd:claude,path:~/Library/Application Support/Claude,path:~/.config/Claude"
+    "cursor|path:~/.cursor,cmd:cursor"
+    "codex|path:~/.codex,cmd:codex"
+    "gemini-cli|path:~/.gemini,cmd:gemini"
+    "opencode|path:~/.opencode,cmd:opencode"
+    "openclaw|path:~/.openclaw"
+    "qwen-code|path:~/.qwen,cmd:qwen"
+    "iflow-cli|path:~/.iflow,cmd:iflow"
+    "windsurf|path:~/.windsurf,cmd:windsurf"
+    "warp|path:~/.warp,path:~/Library/Application Support/dev.warp.Warp-Stable"
+    "amp|cmd:amp"
+    "crush|cmd:crush"
+    "goose|cmd:goose"
+    "droid|cmd:droid"
+    "kode|cmd:kode"
+    "kilo|cmd:kilo"
+    "kimi-cli|path:~/.kimi,cmd:kimi"
+    "kiro-cli|path:~/.kiro,cmd:kiro"
+)
 
 # ── Colors (only if stdout is a TTY) ─────────────────────────────────────
 # Use $'...' so variables hold real ESC bytes — otherwise heredoc output prints
@@ -70,13 +102,110 @@ Options:
   --yes, -y           Non-interactive: install skill to every detected agent, no prompts
   --interactive       Force interactive mode (fails if no TTY/terminal is reachable)
   --only <a,b,c>      Only install skill for these agents (comma-separated, e.g. claude-code,cursor)
+  --all-agents        Skip auto-detection; let 'skills' CLI install for every detected agent
+  --list-agents       Print the agents we'd auto-select on this machine and exit
+  --remote            Force remote-install mode: print URL + QR for the auth step,
+                      do NOT auto-open a local browser. Use this when running over
+                      SSH, in Docker, or via OpenClaw / Claude Code remote channels.
+  --local             Force local mode (auto-open browser) and bypass remote heuristics
+  --force-mcp         Re-run MCP auth even if AgentKey is already configured
   --skip-skill        Skip the skill install step (only run MCP auth)
   --skip-mcp          Skip the MCP auth step (only install the skill)
   -h, --help          Show this help
 
-Default: interactive when a terminal is reachable (even under 'curl | bash'),
-         otherwise falls back to --yes.
+Behavior:
+  Interactive mode is the default when a terminal is reachable; otherwise it
+  falls back to --yes. The installer auto-detects which AI agents are on this
+  machine and pre-selects them for skill installation. Remote-install mode is
+  auto-detected from \$HOME/.openclaw, SSH env vars, and missing \$DISPLAY;
+  override with --remote / --local.
 EOF
+}
+
+# ── Helpers: agent + remote detection ─────────────────────────────────────
+
+# Expand a leading "~" to \$HOME (no glob expansion, no eval).
+_expand_path() {
+    local p="$1"
+    case "$p" in
+        "~"|"~/"*) printf '%s\n' "$HOME${p#"~"}" ;;
+        *)         printf '%s\n' "$p" ;;
+    esac
+}
+
+# Probe a single marker: cmd:NAME (binary on PATH) or path:PATH (file/dir).
+_probe_marker() {
+    local m="$1"
+    case "$m" in
+        cmd:*)  command -v "${m#cmd:}" >/dev/null 2>&1 ;;
+        path:*) [ -e "$(_expand_path "${m#path:}")" ] ;;
+        *)      return 1 ;;
+    esac
+}
+
+# Print detected agent IDs as a comma-separated list (empty if none).
+detect_agents() {
+    local entry id markers marker hits=()
+    for entry in "${AGENT_MARKERS[@]}"; do
+        id="${entry%%|*}"
+        markers="${entry#*|}"
+        # Any marker hit ⇒ agent detected.
+        IFS=',' read -ra marker_list <<<"$markers"
+        for marker in "${marker_list[@]}"; do
+            if _probe_marker "$marker"; then
+                hits+=("$id")
+                break
+            fi
+        done
+    done
+    if [ ${#hits[@]} -gt 0 ]; then
+        printf '%s\n' "${hits[@]}" | sort -u | paste -sd, -
+    fi
+}
+
+# Detect "remote install" — a context where auto-opening a browser on this
+# host is futile because the user isn't sitting in front of it. Mutates
+# nothing; returns 0 (true) for remote, 1 (false) for local.
+detect_remote() {
+    [ "$FORCE_LOCAL" = true ]  && return 1
+    [ "$FORCE_REMOTE" = true ] && return 0
+
+    # OpenClaw runtime — the project owner confirms ~/.openclaw exists in
+    # any host where OpenClaw is installed/active. Most reliable single
+    # signal because it doesn't depend on env-var inheritance through the
+    # docker → channel → shell chain.
+    [ -d "$HOME/.openclaw" ] && return 0
+
+    # Generic SSH session.
+    [ -n "${SSH_CONNECTION:-}" ] && return 0
+    [ -n "${SSH_TTY:-}" ]        && return 0
+
+    # Headless Linux (no GUI session).
+    if [ "$(uname -s)" = "Linux" ] \
+       && [ -z "${DISPLAY:-}" ] \
+       && [ -z "${WAYLAND_DISPLAY:-}" ]; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Cheap "is AgentKey already configured?" check across known MCP config files.
+# Greps for an agentkey block + a non-empty AGENTKEY_API_KEY of the expected
+# shape. Returns 0 if at least one config has both.
+already_authed() {
+    local cfg
+    for cfg in "$HOME/.claude.json" \
+               "$HOME/.cursor/mcp.json" \
+               "$HOME/Library/Application Support/Claude/claude_desktop_config.json" \
+               "$HOME/.config/Claude/claude_desktop_config.json"; do
+        [ -f "$cfg" ] || continue
+        if grep -q '"agentkey"' "$cfg" 2>/dev/null \
+           && grep -qE '"AGENTKEY_API_KEY"[^"]*"ak_[A-Za-z0-9_-]+"' "$cfg" 2>/dev/null; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 install_node() {
@@ -118,6 +247,15 @@ main() {
     local SKIP_MCP=false
     local SKIP_SKILL=false
     local PRINT_HELP=false
+    local LIST_AGENTS=false
+    local ALL_AGENTS=false
+    local FORCE_MCP=false
+    # FORCE_REMOTE / FORCE_LOCAL are read by detect_remote(). Declared as
+    # plain (non-`local`) so the helpers see them — they're dynamic-scope
+    # accessible either way in bash, but explicit assignment here keeps
+    # `set -u` happy.
+    FORCE_REMOTE=false
+    FORCE_LOCAL=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -125,6 +263,11 @@ main() {
             --interactive)     MODE=interactive; shift ;;
             --only)            ONLY_AGENTS="${2:-}"; shift 2 ;;
             --only=*)          ONLY_AGENTS="${1#*=}"; shift ;;
+            --all-agents)      ALL_AGENTS=true; shift ;;
+            --list-agents)     LIST_AGENTS=true; shift ;;
+            --remote)          FORCE_REMOTE=true; shift ;;
+            --local)           FORCE_LOCAL=true; shift ;;
+            --force-mcp)       FORCE_MCP=true; shift ;;
             --skip-skill)      SKIP_SKILL=true; shift ;;
             --skip-mcp)        SKIP_MCP=true; shift ;;
             -h|--help)         PRINT_HELP=true; shift ;;
@@ -133,6 +276,20 @@ main() {
     done
 
     if $PRINT_HELP; then print_help; exit 0; fi
+    if $FORCE_REMOTE && $FORCE_LOCAL; then
+        die "--remote and --local are mutually exclusive"
+    fi
+
+    if $LIST_AGENTS; then
+        local detected
+        detected="$(detect_agents)"
+        if [ -n "$detected" ]; then
+            printf '%s\n' "$detected" | tr ',' '\n'
+        else
+            printf 'no agents detected on this host\n' >&2
+        fi
+        exit 0
+    fi
 
     ui_banner
 
@@ -207,15 +364,39 @@ main() {
     # ── 2. Install the AgentKey skill ─────────────────────────────────────
     if ! $SKIP_SKILL; then
         ui_step "2. Install the AgentKey skill"
-        ui_info "The 'skills' CLI will auto-detect every supported agent on this machine."
+
+        # Resolve target agent list:
+        #   1. --only wins (manual override)
+        #   2. else --all-agents ⇒ no -a (let skills CLI auto-detect everything)
+        #   3. else our auto-detection ⇒ -a <detected list>
+        #   4. else (nothing detected) ⇒ no -a (fall back to skills CLI default)
+        local TARGETS=""
+        if [ -n "$ONLY_AGENTS" ]; then
+            TARGETS="$ONLY_AGENTS"
+            ui_info "Targeting agents from --only: $TARGETS"
+        elif $ALL_AGENTS; then
+            ui_info "Installing for every agent the 'skills' CLI detects (--all-agents)"
+        else
+            TARGETS="$(detect_agents)"
+            if [ -n "$TARGETS" ]; then
+                ui_ok "Detected agents on this host: $TARGETS"
+                ui_muted "(override with --only <ids>, or use --all-agents)"
+            else
+                ui_info "No agents auto-detected — letting 'skills' CLI scan."
+            fi
+        fi
 
         local SKILLS_ARGS=(-y skills add "$SKILL_REPO" -g)
-        if [ -n "$ONLY_AGENTS" ]; then
-            # shellcheck disable=SC2206
-            local AGENT_LIST=(${ONLY_AGENTS//,/ })
+        if [ -n "$TARGETS" ]; then
+            # `skills` CLI accepts -a as either repeated or comma-separated.
+            # We pass each ID individually for maximum compatibility.
+            local AGENT_LIST=()
+            IFS=',' read -ra AGENT_LIST <<<"$TARGETS"
             SKILLS_ARGS+=(-a "${AGENT_LIST[@]}")
         fi
-        if [ "$MODE" = noninteractive ]; then
+        # Always pass -y in noninteractive mode AND when we already resolved
+        # an explicit target list — there's nothing left to ask the user.
+        if [ "$MODE" = noninteractive ] || [ -n "$TARGETS" ]; then
             SKILLS_ARGS+=(-y)
         fi
 
@@ -237,21 +418,44 @@ main() {
     fi
 
     # ── 3. MCP authentication ────────────────────────────────────────────
-    if ! $SKIP_MCP; then
-        ui_step "3. Register the MCP server (browser login)"
-        ui_info "Opening your browser for AgentKey device authentication ..."
-        ui_muted "When auth finishes, the MCP server is written into Claude Code / Claude Desktop / Cursor configs."
+    if $SKIP_MCP; then
+        ui_step "3. Register the MCP server"
+        ui_muted "Skipped (--skip-mcp)"
+    elif already_authed && ! $FORCE_MCP; then
+        ui_step "3. Register the MCP server"
+        ui_ok "AgentKey is already configured in an MCP client config — skipping auth."
+        ui_muted "Re-run with --force-mcp to authenticate again."
+    else
+        # Decide local-vs-remote and route the MCP CLI flags accordingly.
+        local IS_REMOTE=false
+        if detect_remote; then IS_REMOTE=true; fi
+
+        local AUTH_ARGS=(--auth-login)
+        if $IS_REMOTE; then
+            ui_step "3. Register the MCP server (remote auth: scan QR with phone)"
+            ui_info "Detected remote install context — printing QR + URL instead of opening a browser here."
+            if [ -d "$HOME/.openclaw" ]; then
+                ui_muted "  reason: \$HOME/.openclaw exists (OpenClaw runtime)"
+            elif [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ]; then
+                ui_muted "  reason: SSH session detected"
+            elif [ "$(uname -s)" = "Linux" ]; then
+                ui_muted "  reason: Linux without \$DISPLAY / \$WAYLAND_DISPLAY"
+            fi
+            ui_muted "Override with --local if you want a browser opened on this machine instead."
+            AUTH_ARGS+=(--no-browser)
+        else
+            ui_step "3. Register the MCP server (browser login)"
+            ui_info "Opening your browser for AgentKey device authentication ..."
+            ui_muted "When auth finishes, the MCP server is written into Claude Code / Claude Desktop / Cursor configs."
+        fi
         echo
 
-        if ! npx -y "$MCP_PACKAGE" --auth-login; then
+        if ! npx -y "$MCP_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
-            ui_muted "Retry manually:  npx -y $MCP_PACKAGE --auth-login"
+            ui_muted "Retry manually:  npx -y $MCP_PACKAGE ${AUTH_ARGS[*]}"
             exit 1
         fi
         ui_ok "MCP server registered"
-    else
-        ui_step "3. Register the MCP server"
-        ui_muted "Skipped (--skip-mcp)"
     fi
 
     # ── 4. Summary ───────────────────────────────────────────────────────

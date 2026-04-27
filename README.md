@@ -218,21 +218,32 @@ Still stuck? See the "Where do I get help" item below.
 <details>
 <summary><b>Advanced install options (CI / specific agents / manual two-step)</b></summary>
 
+The installer auto-detects which AI agents you have on this machine (by probing well-known config dirs and binaries from the [vercel-labs/skills supported-agents list](https://github.com/vercel-labs/skills)) and pre-selects them — no multi-select prompt. Override with the flags below.
+
 **Installer flags:**
 
 ```bash
 # Non-interactive (CI / unattended): install to every detected agent, no prompts
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --yes
 
-# Only install the skill for specific agents
+# See which agents the installer would auto-select on this host (and exit)
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --list-agents
+
+# Only install the skill for specific agents (overrides auto-detection)
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --only claude-code,cursor
+
+# Skip our agent detection; let `skills` CLI install for every agent it finds
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --all-agents
 
 # Only the skill, or only the MCP auth
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-mcp
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-skill
+
+# Re-authenticate even if AgentKey is already configured locally
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --force-mcp
 ```
 
-PowerShell equivalents: `-Yes`, `-Only`, `-SkipMcp`, `-SkipSkill`.
+PowerShell equivalents: `-Yes`, `-ListAgents`, `-Only`, `-AllAgents`, `-SkipMcp`, `-SkipSkill`, `-ForceMcp`.
 
 **Manual two-step install** (if you'd rather run the two underlying commands yourself, or the one-line installer can't reach your machine):
 
@@ -244,7 +255,32 @@ npx skills add chainbase-labs/agentkey
 npx -y @agentkey/mcp --auth-login
 ```
 
-Over SSH or any shell where a browser can't open, use `npx -y @agentkey/mcp --setup` — an interactive wizard asks for the key and lets you pick which MCP clients to write to.
+</details>
+
+<details>
+<summary><b>Installing over SSH, inside Docker, or via OpenClaw / Claude Code remote channels</b></summary>
+
+When the installer runs on a machine you can't see (an SSH server, a Docker container, an OpenClaw runtime triggered from your phone), the default `--auth-login` would silently spawn a browser on the *remote* host — invisible to you.
+
+The installer detects this automatically and switches to a **scan-from-phone** flow: it prints the auth URL plus a terminal QR code, and skips the browser auto-open. Detection signals (any one fires):
+
+- `~/.openclaw/` exists (OpenClaw runtime)
+- `$SSH_CONNECTION` / `$SSH_TTY` set
+- Linux without `$DISPLAY` / `$WAYLAND_DISPLAY`
+
+Force the mode either way:
+
+```bash
+# Force remote mode (URL + QR, no browser)
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --remote
+
+# Force local mode (auto-open browser, ignore heuristics)
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
+```
+
+PowerShell: `-Remote` / `-Local`.
+
+If you'd rather skip the URL/QR flow entirely and type a key manually, `npx -y @agentkey/mcp --setup` opens an interactive wizard that asks for the key and lets you pick which MCP clients to write to.
 
 </details>
 
