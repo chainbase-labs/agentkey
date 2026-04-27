@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/chainbase-labs/Agentkey/compare/v1.1.0...v1.2.0) (2026-04-27)
+
+
+### Features
+
+* **install:** auto-detect agents, route MCP auth to QR mode for remote installs ([#18](https://github.com/chainbase-labs/Agentkey/issues/18)) ([29176d1](https://github.com/chainbase-labs/Agentkey/commit/29176d1aae5ba05ee64b402e8f2e2635df31c4ed))
+
 ## [1.1.0](https://github.com/chainbase-labs/agentkey/compare/agentkey-skill-v1.0.0...agentkey-skill-v1.1.0) (2026-04-23)
 
 
