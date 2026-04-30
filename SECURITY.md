@@ -32,7 +32,7 @@ We follow coordinated disclosure. Once a fix is available, we publish a security
 
 The skill ships two helper scripts that the agent invokes:
 
-- **`skills/agentkey/scripts/check-update.sh`** — at most every 24 hours, calls `https://api.github.com/repos/chainbase-labs/agentkey/releases/latest` to learn the latest version. When the local version differs and the skill lives inside a git working tree (`.git/` present), the script shallow-fetches the new release tag and checks it out in place; otherwise it prints `UPDATE_FAILED: …` and the user updates manually. The release tag is only ever moved by [release-please](https://github.com/googleapis/release-please) from `main`, so the auto-applied artifact is always traceable to a merged PR.
+- **`skills/agentkey/scripts/check-update.sh`** — **notify-only**. At most every 60 minutes (12 hours once an upgrade is known), it calls `https://api.github.com/repos/chainbase-labs/agentkey/releases/latest`, compares the tag against the local `version.txt`, and prints `UPGRADE_AVAILABLE <old> <new>` if they differ. It never runs `git fetch`, `git checkout`, or any other write operation. Updates are entirely user-driven (`npx skills update chainbase-labs/agentkey`).
 - **`skills/agentkey/scripts/check-mcp.sh`** — reads `~/.claude.json` and `~/.env.local` to verify the AgentKey MCP server is registered and the API key is present. **Read-only**; no network egress; output is a single status code.
 
 ### Files the skill reads or writes
@@ -68,7 +68,7 @@ The skill ships two helper scripts that the agent invokes:
 
 Automated scanners (VirusTotal, ClawScan) may flag this skill as `Suspicious` due to two intentional patterns. We document them here so reviewers can verify intent:
 
-1. **`check-update.sh` contacts GitHub and self-applies a release tag.** Pattern matches "remote-controlled binary update" heuristics. **Why this is intentional:** the script only fast-forwards to a tag on `chainbase-labs/agentkey`, and that tag is only ever set by release-please from a merged PR on `main`. The auto-update preserves UX parity with `npx`-resolved CLIs (which also re-resolve at runtime), and the script source — including the exact `git fetch` + `git checkout` invocation — is auditable in this repository.
+1. **`check-update.sh` contacts GitHub.** Pattern may match "remote-controlled binary update" heuristics. **Why this is intentional:** the script is notify-only — it issues a single `GET https://api.github.com/repos/chainbase-labs/agentkey/releases/latest`, compares the tag against `version.txt`, prints a one-line status (`UP_TO_DATE` or `UPGRADE_AVAILABLE <old> <new>`), and exits. It never writes anywhere except the cache file at `${TMPDIR}/agentkey-update-check`, never invokes `git`, and never executes downloaded code. Applying the update is the user's manual `npx skills update chainbase-labs/agentkey`.
 2. **`check-mcp.sh` reads `*API_KEY*` env values.** Pattern matches "credential harvesting" heuristics. **Why this is intentional:** the read is local-only, never transmitted, and exists purely to confirm `AGENTKEY_API_KEY` is configured before the agent attempts an MCP call. The script's only output is a one-word status code (`MCP_OK` / `MCP_NO_KEY` / `MCP_NOT_CONFIGURED`); the key value itself is discarded.
 
 If you operate a scanner and need additional context to triage, please email `support@chainbase.com`.

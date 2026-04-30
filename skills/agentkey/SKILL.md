@@ -10,12 +10,11 @@ version: 1.0.0
 
 **Step 0 (always run first):**
 
-1. Run the auto-update check silently (cached 24h — repeat calls are <10ms):
+1. Run the version check silently (cached — repeat calls are <10ms):
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
    ```
-   - `UPDATED: vX.Y.Z` → Tell the user once: "✓ AgentKey Skill updated to vX.Y.Z."
-   - `UPDATE_FAILED: ...` → Show the message verbatim to the user.
+   - `UPGRADE_AVAILABLE <old> <new>` → Tell the user once: "AgentKey v\<new\> is available (currently on v\<old\>). Run \`npx skills update chainbase-labs/agentkey\` to update."
    - `UP_TO_DATE` or empty → continue silently.
 
 2. Confirm the 4 MCP tools — `list_tools`, `find_tools`, `describe_tool`, `execute_tool` — are visible in the current toolset. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
