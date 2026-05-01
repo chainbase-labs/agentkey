@@ -10,15 +10,61 @@ version: 1.0.0
 
 **Step 0 (always run first):**
 
-1. Run the auto-update check silently (cached 24h — repeat calls are <10ms):
+1. Run the version check silently (cached — repeat calls are <10ms):
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
    ```
-   - `UPDATED: vX.Y.Z` → Tell the user once: "✓ AgentKey Skill updated to vX.Y.Z."
-   - `UPDATE_FAILED: ...` → Show the message verbatim to the user.
-   - `UP_TO_DATE` or empty → continue silently.
+   - `UP_TO_DATE` or empty → continue silently to step 2.
+   - `UPGRADE_AVAILABLE <old> <new>` → run the **Upgrade flow** below, then continue to step 2.
 
 2. Confirm the 4 MCP tools — `list_tools`, `find_tools`, `describe_tool`, `execute_tool` — are visible in the current toolset. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
+
+### Upgrade flow
+
+Triggered when `check-update.sh` outputs `UPGRADE_AVAILABLE <old> <new>`. Substitute `<old>` and `<new>` with the actual versions parsed from that line.
+
+**Step A — Check for auto-upgrade opt-in.** Run:
+```bash
+if [ "${AGENTKEY_AUTO_UPGRADE:-0}" = "1" ] || [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/auto-upgrade" ]; then echo AUTO=1; fi
+```
+If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> → v\<new\>…", run **Step C**, then continue to step 2. **Do not** show the AskUserQuestion prompt.
+
+**Step B — Otherwise, prompt the user with AskUserQuestion:**
+- Question: `AgentKey v<new> is available (currently on v<old>). Upgrade now?`
+- Options:
+  - **`Yes, upgrade now`** → run **Step C**.
+  - **`Always keep me up to date`** → run:
+    ```bash
+    mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/auto-upgrade"
+    ```
+    Tell the user "Auto-upgrade enabled — future AgentKey updates install automatically. Remove `~/.config/agentkey/auto-upgrade` to undo." Then run **Step C**.
+  - **`Not now`** → run:
+    ```bash
+    _CFG="${XDG_CONFIG_HOME:-$HOME/.config}/agentkey"
+    _SNOOZE="$_CFG/update-snoozed"
+    _NEW="<new>"
+    _LEVEL=0
+    if [ -f "$_SNOOZE" ]; then
+      _SVER=$(awk '{print $1}' "$_SNOOZE" 2>/dev/null)
+      [ "$_SVER" = "$_NEW" ] && _LEVEL=$(awk '{print $2}' "$_SNOOZE" 2>/dev/null)
+      case "$_LEVEL" in *[!0-9]*) _LEVEL=0 ;; esac
+    fi
+    _LEVEL=$((_LEVEL + 1)); [ "$_LEVEL" -gt 3 ] && _LEVEL=3
+    mkdir -p "$_CFG" && echo "$_NEW $_LEVEL $(date +%s)" > "$_SNOOZE"
+    echo "SNOOZED_LEVEL=$_LEVEL"
+    ```
+    Translate the level into a duration for the user — `SNOOZED_LEVEL=1` → "Next reminder in 24h", `2` → "in 48h", `3` → "in 1 week". Continue to step 2 — **do not** upgrade.
+  - **`Never ask again`** → run:
+    ```bash
+    mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/update-disabled"
+    ```
+    Tell the user "Update checks disabled. Remove `~/.config/agentkey/update-disabled` to re-enable." Continue to step 2 — **do not** upgrade.
+
+**Step C — Run the upgrade.** Invoke:
+```bash
+npx skills update chainbase-labs/agentkey
+```
+On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update chainbase-labs/agentkey` manually to retry." Either way, continue to step 2.
 
 Then route by intent:
 - "setup"/"install"/"api key"/"reinstall" → **Setup**

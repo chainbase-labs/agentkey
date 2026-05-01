@@ -14,11 +14,12 @@ check_key_exists() {
     if [ -f "$HOME/.claude.json" ]; then
         local key_val
         key_val=$(python3 -c "
-import json, sys
+import json, os
 try:
-    d = json.load(open('$HOME/.claude.json'))
+    with open(os.path.expanduser('~/.claude.json')) as f:
+        d = json.load(f)
     print(d.get('mcpServers', {}).get('agentkey', {}).get('env', {}).get('AGENTKEY_API_KEY', ''))
-except: pass
+except Exception: pass
 " 2>/dev/null | tr -d '[:space:]')
         [ -n "$key_val" ] && return 0
     fi
