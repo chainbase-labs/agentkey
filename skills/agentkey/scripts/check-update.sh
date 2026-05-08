@@ -19,8 +19,13 @@ CACHE_TTL_UP_TO_DATE=3600     # 60 min — detect new releases quickly
 CACHE_TTL_UPGRADE=43200       # 12 h — keep nagging once an upgrade is known
 CURL_TIMEOUT=3
 
-PLUGIN_ROOT="${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." 2>/dev/null && pwd)}"
-VERSION_FILE="$PLUGIN_ROOT/version.txt"
+# Anchor on the skill directory itself, not on a "plugin root" — the skill is
+# distributed two ways with different layouts: as a Claude Code plugin (whole
+# repo) or via the Skills CLI (only `skills/agentkey/` is copied to
+# ~/.claude/skills/agentkey/). Resolving relative to this script keeps both
+# paths working without depending on CLAUDE_PLUGIN_ROOT.
+SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
+VERSION_FILE="$SKILL_ROOT/version.txt"
 CACHE_FILE="${TMPDIR:-/tmp}/agentkey-update-check"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agentkey"
 DISABLED_FILE="$CONFIG_DIR/update-disabled"

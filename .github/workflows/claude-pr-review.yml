@@ -186,7 +186,7 @@ jobs:
 
             ### 4b. Files that shouldn't be touched directly
               - `archive/**` — retired code
-              - `version.txt` — managed by release-please
+              - `skills/agentkey/version.txt` — managed by release-please
               - `.release-please-manifest.json` — managed
               - `CHANGELOG.md` — managed (unless part of a release PR
                 from release-please itself, which won't trigger this

@@ -342,16 +342,16 @@ agentkey/
 ├── .mcp.json                    # 作为插件安装时使用
 ├── skills/agentkey/
 │   ├── SKILL.md                 # 决策树 & 路由规则
-│   └── scripts/                 # check-mcp / check-update 辅助脚本
-├── scripts/
-│   ├── install.sh               # 一键安装脚本（mac/linux）
-│   ├── install.ps1              # Windows PowerShell 安装脚本
-│   ├── uninstall.sh             # 一键卸载脚本（mac/linux）
-│   └── uninstall.ps1            # Windows PowerShell 卸载脚本
-└── version.txt                  # 由 release-please 自动维护
+│   ├── scripts/                 # check-mcp / check-update 辅助脚本
+│   └── version.txt              # 由 release-please 自动维护
+└── scripts/
+    ├── install.sh               # 一键安装脚本（mac/linux）
+    ├── install.ps1              # Windows PowerShell 安装脚本
+    ├── uninstall.sh             # 一键卸载脚本（mac/linux）
+    └── uninstall.ps1            # Windows PowerShell 卸载脚本
 ```
 
-**发布新版本（Maintainer）：** 发版由 [release-please](https://github.com/googleapis/release-please) 自动触发。合并一个 `feat:` 或 `fix:` 的 PR 后，release-please 会开一个 Release PR，自动 bump `version.txt`、`plugin.json`、`CHANGELOG.md`。合并这个 Release PR 即会创建 tag + GitHub Release + 上传 `agentkey.skill` 产物。
+**发布新版本（Maintainer）：** 发版由 [release-please](https://github.com/googleapis/release-please) 自动触发。合并一个 `feat:` 或 `fix:` 的 PR 后，release-please 会开一个 Release PR，自动 bump `skills/agentkey/version.txt`、`plugin.json`、`CHANGELOG.md`。合并这个 Release PR 即会创建 tag + GitHub Release + 上传 `agentkey.skill` 产物。
 
 </details>
 
