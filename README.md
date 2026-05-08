@@ -342,16 +342,16 @@ agentkey/
 ├── .mcp.json                    # Used when installed as a plugin
 ├── skills/agentkey/
 │   ├── SKILL.md                 # Decision tree + routing rules
-│   └── scripts/                 # check-mcp / check-update helpers
-├── scripts/
-│   ├── install.sh               # One-command installer (mac/linux)
-│   ├── install.ps1              # Windows PowerShell installer
-│   ├── uninstall.sh             # One-command uninstaller (mac/linux)
-│   └── uninstall.ps1            # Windows PowerShell uninstaller
-└── version.txt                  # Managed by release-please
+│   ├── scripts/                 # check-mcp / check-update helpers
+│   └── version.txt              # Managed by release-please
+└── scripts/
+    ├── install.sh               # One-command installer (mac/linux)
+    ├── install.ps1              # Windows PowerShell installer
+    ├── uninstall.sh             # One-command uninstaller (mac/linux)
+    └── uninstall.ps1            # Windows PowerShell uninstaller
 ```
 
-**Release a new version (maintainers):** releases are cut automatically by [release-please](https://github.com/googleapis/release-please). Merging a PR with a `feat:` or `fix:` title opens a Release PR that bumps `version.txt`, `plugin.json`, and `CHANGELOG.md`. Merging the Release PR creates the tag + GitHub Release + uploads the `agentkey.skill` asset.
+**Release a new version (maintainers):** releases are cut automatically by [release-please](https://github.com/googleapis/release-please). Merging a PR with a `feat:` or `fix:` title opens a Release PR that bumps `skills/agentkey/version.txt`, `plugin.json`, and `CHANGELOG.md`. Merging the Release PR creates the tag + GitHub Release + uploads the `agentkey.skill` asset.
 
 </details>
 

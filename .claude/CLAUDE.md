@@ -23,10 +23,10 @@ agentkey/
 ├── .mcp.json                    # Auto-registers AgentKey MCP when installed as a plugin
 ├── skills/agentkey/
 │   ├── SKILL.md                 # Decision tree + routing rules (end-user facing)
-│   └── scripts/                 # check-mcp / check-update helpers
-├── scripts/
-│   └── uninstall.sh             # End-user cleanup helper
-└── version.txt                  # Managed by release-please only
+│   ├── scripts/                 # check-mcp / check-update helpers
+│   └── version.txt              # Managed by release-please only — must live inside the skill so it survives `npx skills add`
+└── scripts/
+    └── uninstall.sh             # End-user cleanup helper
 ```
 
 ## Key Commands
@@ -48,11 +48,12 @@ git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z
 gh release delete vX.Y.Z --repo chainbase-labs/agentkey --yes
 ```
 
-Releases are driven by [release-please](https://github.com/googleapis/release-please): merged PRs with Conventional Commit messages (`feat:`, `fix:`, `feat!:`, etc.) update an open Release PR that bumps `version`, `.claude-plugin/plugin.json` version, and `CHANGELOG.md`. Merging the Release PR tags the release and creates the GitHub Release, which in turn triggers plugin updates for users.
+Releases are driven by [release-please](https://github.com/googleapis/release-please): merged PRs with Conventional Commit messages (`feat:`, `fix:`, `feat!:`, etc.) update an open Release PR that bumps `skills/agentkey/version.txt`, `.claude-plugin/plugin.json` version, and `CHANGELOG.md`. Merging the Release PR tags the release and creates the GitHub Release, which in turn triggers plugin updates for users.
 
 ## Version & Release Rules
 
-- `version`, `.claude-plugin/plugin.json` version, and `CHANGELOG.md` are managed by release-please based on Conventional Commits — never edit manually except via PR that intentionally amends them.
+- `skills/agentkey/version.txt`, `.claude-plugin/plugin.json` version, and `CHANGELOG.md` are managed by release-please based on Conventional Commits — never edit manually except via PR that intentionally amends them.
+- `version.txt` lives inside `skills/agentkey/` (not at repo root) so it travels with the skill when the Skills CLI copies the subdirectory. `release-please-config.json` points at this path via `version-file`.
 - Tag format: `v` prefix (e.g. `v0.4.5`)
 - Plugin updates trigger on **GitHub Release** publication, not on plain commits
 - `npx skills update` pulls from the default branch, so main must always be shippable

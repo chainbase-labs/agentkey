@@ -4,6 +4,7 @@
       "package-name": "agentkey-skill",
       "release-type": "simple",
       "changelog-path": "CHANGELOG.md",
+      "version-file": "skills/agentkey/version.txt",
       "bump-minor-pre-major": false,
       "bump-patch-for-minor-pre-major": false,
       "include-v-in-tag": true,
