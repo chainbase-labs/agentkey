@@ -14,6 +14,14 @@
           "type": "json",
           "path": ".claude-plugin/plugin.json",
           "jsonpath": "$.version"
+        },
+        {
+          "type": "generic",
+          "path": "skills/agentkey/scripts/check-update.sh"
+        },
+        {
+          "type": "generic",
+          "path": "skills/agentkey/SKILL.md"
         }
       ]
     }

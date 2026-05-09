@@ -11,21 +11,29 @@
 #   UP_TO_DATE                       — local matches latest release
 #   UPGRADE_AVAILABLE <old> <new>    — local differs from latest release
 #                                      AND not currently snoozed/disabled
-#   (empty / silent)                 — disabled, snoozed, no version file,
-#                                      network down, or unexpected response
+#   (empty / silent)                 — disabled, snoozed, embedded version
+#                                      malformed, network down, or unexpected
+#                                      response
+
+# Strict-ish mode: catch unset vars and silent pipe failures. We deliberately
+# do *not* set -e — several code paths intentionally rely on commands failing
+# silently (curl with no network, optional files missing, cache writes on a
+# read-only TMPDIR, etc.) and we guard each one with `|| true` / explicit
+# fallbacks instead.
+set -u
+set -o pipefail
 
 REPO="chainbase-labs/agentkey"
 CACHE_TTL_UP_TO_DATE=3600     # 60 min — detect new releases quickly
 CACHE_TTL_UPGRADE=43200       # 12 h — keep nagging once an upgrade is known
 CURL_TIMEOUT=3
 
-# Anchor on the skill directory itself, not on a "plugin root" — the skill is
-# distributed two ways with different layouts: as a Claude Code plugin (whole
-# repo) or via the Skills CLI (only `skills/agentkey/` is copied to
-# ~/.claude/skills/agentkey/). Resolving relative to this script keeps both
-# paths working without depending on CLAUDE_PLUGIN_ROOT.
-SKILL_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." 2>/dev/null && pwd)"
-VERSION_FILE="$SKILL_ROOT/version.txt"
+# Local version is embedded at release time — no filesystem traversal,
+# no dependency on CLAUDE_PLUGIN_ROOT or the skill's installed layout.
+# release-please syncs this line on every release via the `extra-files`
+# entry in release-please-config.json. Do not edit by hand.
+LOCAL_VERSION="1.2.3" # x-release-please-version
+
 CACHE_FILE="${TMPDIR:-/tmp}/agentkey-update-check"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agentkey"
 DISABLED_FILE="$CONFIG_DIR/update-disabled"
@@ -36,10 +44,15 @@ if [ -f "$DISABLED_FILE" ]; then
     exit 0
 fi
 
-LOCAL_VERSION=$(tr -d '[:space:]' < "$VERSION_FILE" 2>/dev/null)
-if [ -z "$LOCAL_VERSION" ]; then
-    exit 0
-fi
+# Sanity check the embedded version — if release-please ever fails to sync
+# this line, exit silently rather than emit garbage.
+case "$LOCAL_VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) exit 0 ;;
+esac
+
+# Cache `date +%s` once — used by both the cache age math and snooze expiry.
+NOW=$(date +%s)
 
 # check_snooze <remote_version> → returns 0 (snoozed) or 1 (not snoozed).
 # Snooze file format: "<version> <level> <epoch>" where level 1=24h, 2=48h, 3+=7d.
@@ -47,49 +60,57 @@ fi
 check_snooze() {
     local remote_ver="$1"
     [ -f "$SNOOZE_FILE" ] || return 1
-    local sver slevel sepoch
-    sver=$(awk '{print $1}' "$SNOOZE_FILE" 2>/dev/null)
-    slevel=$(awk '{print $2}' "$SNOOZE_FILE" 2>/dev/null)
-    sepoch=$(awk '{print $3}' "$SNOOZE_FILE" 2>/dev/null)
+
+    # Single-pass read replaces the previous 3× awk fork. Also closes the
+    # race where the file could be rewritten between fields.
+    local sver="" slevel="" sepoch="" _rest=""
+    read -r sver slevel sepoch _rest < "$SNOOZE_FILE" 2>/dev/null || return 1
+
     [ -n "$sver" ] && [ -n "$slevel" ] && [ -n "$sepoch" ] || return 1
     case "$slevel" in *[!0-9]*) return 1 ;; esac
     case "$sepoch" in *[!0-9]*) return 1 ;; esac
     [ "$sver" = "$remote_ver" ] || return 1
+
     local duration
     case "$slevel" in
         1) duration=86400 ;;
         2) duration=172800 ;;
         *) duration=604800 ;;
     esac
-    local now
-    now=$(date +%s)
-    [ $((sepoch + duration)) -gt "$now" ]
+
+    [ $((sepoch + duration)) -gt "$NOW" ]
 }
 
 # Fast path: recent cache hit — avoids the GitHub API round-trip (~1.5s).
 if [ -f "$CACHE_FILE" ]; then
-    MTIME=$(stat -f %m "$CACHE_FILE" 2>/dev/null || stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0)
-    AGE=$(( $(date +%s) - MTIME ))
-    CACHED=$(head -1 "$CACHE_FILE" 2>/dev/null || true)
-    case "$CACHED" in
-        "UP_TO_DATE")          TTL=$CACHE_TTL_UP_TO_DATE ;;
-        "UPGRADE_AVAILABLE "*) TTL=$CACHE_TTL_UPGRADE ;;
-        *)                     TTL=0 ;;
+    MTIME=$(stat -f %m "$CACHE_FILE" 2>/dev/null \
+            || stat -c %Y "$CACHE_FILE" 2>/dev/null \
+            || echo 0)
+    AGE=$(( NOW - MTIME ))
+
+    # Single-pass read of the cache line. Empty / corrupted cache → all
+    # fields stay empty and fall through to slow path.
+    CACHED_KIND="" CACHED_OLD="" CACHED_NEW="" _rest=""
+    read -r CACHED_KIND CACHED_OLD CACHED_NEW _rest < "$CACHE_FILE" 2>/dev/null || true
+
+    case "$CACHED_KIND" in
+        "UP_TO_DATE")        TTL=$CACHE_TTL_UP_TO_DATE ;;
+        "UPGRADE_AVAILABLE") TTL=$CACHE_TTL_UPGRADE ;;
+        *)                   TTL=0 ;;
     esac
+
     if [ "$AGE" -ge 0 ] && [ "$AGE" -lt "$TTL" ]; then
-        case "$CACHED" in
+        case "$CACHED_KIND" in
             "UP_TO_DATE")
                 echo "UP_TO_DATE"
                 exit 0
                 ;;
-            "UPGRADE_AVAILABLE "*)
-                CACHED_OLD=$(echo "$CACHED" | awk '{print $2}')
-                if [ "$CACHED_OLD" = "$LOCAL_VERSION" ]; then
-                    CACHED_NEW=$(echo "$CACHED" | awk '{print $3}')
+            "UPGRADE_AVAILABLE")
+                if [ "$CACHED_OLD" = "$LOCAL_VERSION" ] && [ -n "$CACHED_NEW" ]; then
                     if check_snooze "$CACHED_NEW"; then
                         exit 0
                     fi
-                    echo "$CACHED"
+                    echo "UPGRADE_AVAILABLE $CACHED_OLD $CACHED_NEW"
                     exit 0
                 fi
                 # Local moved on — fall through to re-check.
@@ -102,24 +123,25 @@ fi
 LATEST_TAG=$(curl -sf --max-time "$CURL_TIMEOUT" \
     "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
     | grep -m1 '"tag_name"' \
-    | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/')
-LATEST_VERSION=${LATEST_TAG#[vV]}
+    | sed 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/') || true
+LATEST_VERSION="${LATEST_TAG#[vV]}"
 
 # Validate response looks like a version number — rejects HTML error pages,
 # rate-limit JSON, and other surprises that slipped past curl -f.
-if ! echo "$LATEST_VERSION" | grep -qE '^[0-9]+\.[0-9.]+$'; then
-    exit 0
-fi
+case "$LATEST_VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) exit 0 ;;
+esac
 
 if [ "$LOCAL_VERSION" = "$LATEST_VERSION" ]; then
-    echo "UP_TO_DATE" > "$CACHE_FILE" 2>/dev/null
+    echo "UP_TO_DATE" > "$CACHE_FILE" 2>/dev/null || true
     echo "UP_TO_DATE"
     exit 0
 fi
 
 # Newer version available — cache the result, then suppress output if snoozed.
 MSG="UPGRADE_AVAILABLE $LOCAL_VERSION $LATEST_VERSION"
-echo "$MSG" > "$CACHE_FILE" 2>/dev/null
+echo "$MSG" > "$CACHE_FILE" 2>/dev/null || true
 if check_snooze "$LATEST_VERSION"; then
     exit 0
 fi
