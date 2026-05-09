@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4](https://github.com/chainbase-labs/Agentkey/compare/v1.2.3...v1.2.4) (2026-05-09)
+
+
+### Bug Fixes
+
+* **skill:** eliminate Hermes scanner findings ([#28](https://github.com/chainbase-labs/Agentkey/issues/28)) ([41e1724](https://github.com/chainbase-labs/Agentkey/commit/41e172486acbe593e8df5977c68f72d28a5f84ff))
+
 ## [1.2.3](https://github.com/chainbase-labs/Agentkey/compare/v1.2.2...v1.2.3) (2026-05-08)
 
 
