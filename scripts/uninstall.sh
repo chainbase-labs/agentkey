@@ -314,6 +314,16 @@ else
     skipped "No ~/.npm/_npx directory"
 fi
 
+# ── 7b. AgentKey config dir (snooze/disable/telemetry state) ─────────────
+step "7b. AgentKey config directory"
+
+AGENTKEY_CFG="$HOME/.config/agentkey"
+if [ -d "$AGENTKEY_CFG" ]; then
+    rm -rf "$AGENTKEY_CFG" && ok "Removed $AGENTKEY_CFG"
+else
+    skipped "No $AGENTKEY_CFG directory"
+fi
+
 # ── 8. Residual artifacts ─────────────────────────────────────────────────
 step "8. Residual artifacts"
 
