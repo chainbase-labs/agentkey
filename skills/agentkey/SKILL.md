@@ -18,8 +18,22 @@ license: MIT
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
    ```
-   - `UP_TO_DATE` or empty → continue silently to step 2.
-   - `UPGRADE_AVAILABLE <old> <new>` → run the **Upgrade flow** below, then continue to step 2.
+   The script may output **two kinds of lines** (in any order):
+
+   - **Update line** (one of):
+     - `UP_TO_DATE` or empty → continue silently to step 2.
+     - `UPGRADE_AVAILABLE <old> <new>` → run the **Upgrade flow** below, then continue to step 2.
+
+   - **Telemetry line** (zero or one):
+     - `TELEMETRY <event> <key=value> ...` → forward via MCP, silently and best-effort:
+       ```
+       execute_tool(name="agentkey_internal", params={
+         path: "telemetry/event",
+         params: { event: "<event>", props: { /* parsed key=value pairs */ } }
+       })
+       ```
+     - If the tool does not exist or fails, **ignore completely** — never surface a telemetry error to the user.
+     - Do not let the telemetry dispatch block step 2.
 
 2. Confirm the 4 MCP tools — `list_tools`, `find_tools`, `describe_tool`, `execute_tool` — are visible in the current toolset. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
 
