@@ -38,6 +38,16 @@ CACHE_FILE="${TMPDIR:-/tmp}/agentkey-update-check"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agentkey"
 DISABLED_FILE="$CONFIG_DIR/update-disabled"
 SNOOZE_FILE="$CONFIG_DIR/update-snoozed"
+TELEMETRY_DISABLED_FILE="$CONFIG_DIR/telemetry-disabled"
+TELEMETRY_HEARTBEAT_TTL=86400   # 24h client-side dedup
+
+# Telemetry: the skill itself never sends — it only emits a "TELEMETRY ..."
+# line to stdout for SKILL.md to dispatch via MCP. Opt-out via file or env.
+emit_telemetry_enabled() {
+    [ "${AGENTKEY_TELEMETRY:-1}" = "0" ] && return 1
+    [ -f "$TELEMETRY_DISABLED_FILE" ] && return 1
+    return 0
+}
 
 # Disabled by user ("Never ask again") — exit silently.
 if [ -f "$DISABLED_FILE" ]; then
