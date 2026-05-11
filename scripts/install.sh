@@ -240,6 +240,26 @@ install_node() {
     ui_ok "Node.js installed"
 }
 
+# Compute a stable per-device fingerprint for install_completed dedup.
+# spec §6.3: sha256(hostname+platform+username)[:16]. Falls back to a random
+# value if neither sha256sum nor shasum is available (extremely rare).
+compute_device_fingerprint() {
+    local platform="$1"
+    local hn user input hash
+    hn="$(hostname 2>/dev/null || echo "")"
+    user="${USER:-$(id -un 2>/dev/null || echo "")}"
+    input="$hn|$platform|$user"
+    if command -v sha256sum >/dev/null 2>&1; then
+        hash="$(printf '%s' "$input" | sha256sum | cut -c1-16)"
+    elif command -v shasum >/dev/null 2>&1; then
+        hash="$(printf '%s' "$input" | shasum -a 256 | cut -c1-16)"
+    else
+        # Last resort: use $RANDOM. Won't dedup across runs but won't crash.
+        hash="rnd$(printf '%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM")"
+    fi
+    printf '%s' "$hash"
+}
+
 # ──────────────────────────────────────────────────────────────────────────
 # main — wraps the entire procedural body so that under `curl | bash`
 # bash finishes reading the script before any fd-rebinding happens.
@@ -488,6 +508,20 @@ main() {
             ui_muted "When auth finishes, the MCP server is written into Claude Code / Claude Desktop / Cursor configs."
         fi
         echo
+
+        # Telemetry context: server picks these up from env and capture
+        # install_completed. Always exported (even when opt-out), because
+        # AGENTKEY_TELEMETRY=0 is itself one of the signals the server reads.
+        local _flags=""
+        for _f in "$@"; do _flags="${_flags:+$_flags,}$_f"; done
+        export AGENTKEY_TELEMETRY="$($NO_TELEMETRY && echo 0 || echo 1)"
+        # If the persistent opt-out file exists, force 0 regardless of flag.
+        [ -f "$TELEMETRY_OPT_OUT_FILE" ] && export AGENTKEY_TELEMETRY=0
+        export AGENTKEY_INSTALL_SOURCE="one_liner"
+        export AGENTKEY_DETECTED_AGENTS="$(detect_agents)"
+        export AGENTKEY_SELECTED_AGENTS="${TARGETS:-}"
+        export AGENTKEY_INSTALLER_FLAGS="$_flags"
+        export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
 
         if ! npx -y "$MCP_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
