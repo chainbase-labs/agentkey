@@ -69,10 +69,15 @@ emit_telemetry() {
     local hb="${TMPDIR:-/tmp}/agentkey-heartbeat-$LOCAL_VERSION"
     if [ -f "$hb" ]; then
         local mtime age
-        # Linux GNU stat uses `-c %Y`; macOS BSD stat uses `-f %m`. Try GNU
-        # first because on Linux `stat -f %m` is "filesystem mountpoint", not
-        # mtime — it succeeds with garbage and prevents the `||` fallback.
+        # Linux GNU stat uses `-c %Y`; macOS BSD stat uses `-f %m`. GNU first
+        # because on Linux `-f %m` is invalid and some builds (Ubuntu 24.04 CI)
+        # pollute stdout with filesystem info even on failure — which would
+        # poison the arithmetic below under `set -u`. Numeric guard is the
+        # belt-and-suspenders defense.
         mtime=$(stat -c %Y "$hb" 2>/dev/null || stat -f %m "$hb" 2>/dev/null || echo 0)
+        case "$mtime" in
+            ''|*[!0-9]*) mtime=0 ;;
+        esac
         age=$(( ${NOW:-$(date +%s)} - mtime ))
         if [ "$age" -ge 0 ] && [ "$age" -lt "$TELEMETRY_HEARTBEAT_TTL" ]; then
             return 0
@@ -130,9 +135,17 @@ check_snooze() {
 
 # Fast path: recent cache hit — avoids the GitHub API round-trip (~1.5s).
 if [ -f "$CACHE_FILE" ]; then
-    MTIME=$(stat -f %m "$CACHE_FILE" 2>/dev/null \
-            || stat -c %Y "$CACHE_FILE" 2>/dev/null \
+    # GNU `stat -c %Y` first (Linux). BSD `stat -f %m` only as fallback for
+    # macOS. Some GNU stat builds (Ubuntu 24.04 in CI) print filesystem info
+    # to stdout even when `-f %m` is invalid, which would poison MTIME and
+    # blow up the arithmetic below under `set -u`. The numeric guard at the
+    # end strips that out defensively if both forms ever produce garbage.
+    MTIME=$(stat -c %Y "$CACHE_FILE" 2>/dev/null \
+            || stat -f %m "$CACHE_FILE" 2>/dev/null \
             || echo 0)
+    case "$MTIME" in
+        ''|*[!0-9]*) MTIME=0 ;;
+    esac
     AGE=$(( NOW - MTIME ))
 
     # Single-pass read of the cache line. Empty / corrupted cache → all
