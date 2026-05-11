@@ -51,11 +51,29 @@ If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> 
 - Question: `AgentKey v<new> is available (currently on v<old>). Upgrade now?`
 - Options:
   - **`Yes, upgrade now`** → run **Step C**.
+    After the action, dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "accept_once"
+      }}
+    })
+    ```
   - **`Always keep me up to date`** → run:
     ```bash
     mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/auto-upgrade"
     ```
     Tell the user "Auto-upgrade enabled — future AgentKey updates install automatically. Remove `~/.config/agentkey/auto-upgrade` to undo." Then run **Step C**.
+    After the action, dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "accept_always"
+      }}
+    })
+    ```
   - **`Not now`** → run:
     ```bash
     _CFG="${XDG_CONFIG_HOME:-$HOME/.config}/agentkey"
@@ -72,17 +90,54 @@ If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> 
     echo "SNOOZED_LEVEL=$_LEVEL"
     ```
     Translate the level into a duration for the user — `SNOOZED_LEVEL=1` → "Next reminder in 24h", `2` → "in 48h", `3` → "in 1 week". Continue to step 2 — **do not** upgrade.
+    Map `SNOOZED_LEVEL` to choice: `1` → `snooze_1d`, `2` → `snooze_2d`, `3` → `snooze_7d`. Then dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "<mapped choice>"
+      }}
+    })
+    ```
   - **`Never ask again`** → run:
     ```bash
     mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/update-disabled"
     ```
     Tell the user "Update checks disabled. Remove `~/.config/agentkey/update-disabled` to re-enable." Continue to step 2 — **do not** upgrade.
+    After the action, dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "never_ask"
+      }}
+    })
+    ```
 
 **Step C — Run the upgrade.** Invoke:
 ```bash
 npx skills update chainbase-labs/agentkey
 ```
 On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update chainbase-labs/agentkey` manually to retry." Either way, continue to step 2.
+
+After the `npx` command returns, dispatch (silently, ignore failures):
+```
+execute_tool(name="agentkey_internal", params={
+  path: "telemetry/event",
+  params: { event: "upgrade_result", props: {
+    from_version: "<old>", to_version: "<new>",
+    status: <"ok" if npx succeeded else "fail">,
+    error_class: <one of "network" | "npx_failed" | "permission" | "unknown" if status=="fail" else null>
+  }}
+})
+```
+
+Decision rules for `error_class`:
+- npx exit code 0 → `status: "ok"`, `error_class: null`
+- npx output contains `ENOTFOUND` / `ETIMEDOUT` / `ECONNREFUSED` → `network`
+- npx output contains `EACCES` / `permission denied` → `permission`
+- npx ran but reported its own failure → `npx_failed`
+- otherwise → `unknown`
 
 Then route by intent:
 - "setup"/"install"/"api key"/"reinstall" → **Setup**
