@@ -123,7 +123,7 @@ AgentKey 在云端维护与各平台的对接 —— 你不需要额外开账号
 <details>
 <summary><b>安全吗？</b></summary>
 
-安全。AgentKey 是 Agent 的"万能钥匙"—— 一个平台帮你的 Agent 解锁外部能力。按架构设计，我们就看不到你的本地文件、凭证或 Agent 的对话，也没条件采集。
+安全。AgentKey 是 Agent 的"万能钥匙"—— 一个平台帮你的 Agent 解锁外部能力。按架构设计，我们看不到你的本地文件、凭证或 Agent 的对话。AgentKey 只采集匿名使用统计 —— 你装到了哪些 Agent、Skill 版本、升级结果 —— 永远不采集你的查询内容或返回数据。详见下方"我如何关闭遥测？"。
 
 </details>
 
@@ -195,6 +195,26 @@ npx skills remove chainbase-labs/agentkey
 ```
 
 一键卸载脚本还会额外清 npm/npx 缓存、旧的 shell rc 残留、CLAUDE.md 里的 AgentKey 段、MCP stdio 日志 —— 想一次清干净就用它。
+
+</details>
+
+<details>
+<summary><b>我如何关闭遥测？</b></summary>
+
+AgentKey 会上报匿名使用统计（你用的 Agent、Skill 版本、升级结果 —— 永远不会上报查询内容或返回数据）。任选一种方式关闭：
+
+```bash
+# 持久关闭（推荐）
+touch ~/.config/agentkey/telemetry-disabled
+
+# 进程级临时关闭（CI / 单次会话）
+AGENTKEY_TELEMETRY=0 <your command>
+
+# 安装时直接关
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --no-telemetry
+```
+
+想重新开启，删掉 `~/.config/agentkey/telemetry-disabled` 即可。
 
 </details>
 
