@@ -111,6 +111,9 @@ Options:
   --force-mcp         Re-run MCP auth even if AgentKey is already configured
   --skip-skill        Skip the skill install step (only run MCP auth)
   --skip-mcp          Skip the MCP auth step (only install the skill)
+  --no-telemetry      Disable anonymous usage telemetry (writes
+                      ~/.config/agentkey/telemetry-disabled so the skill
+                      stays opted-out across runs)
   -h, --help          Show this help
 
 Behavior:
@@ -256,6 +259,7 @@ main() {
     # `set -u` happy.
     FORCE_REMOTE=false
     FORCE_LOCAL=false
+    local NO_TELEMETRY=false
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -270,6 +274,7 @@ main() {
             --force-mcp)       FORCE_MCP=true; shift ;;
             --skip-skill)      SKIP_SKILL=true; shift ;;
             --skip-mcp)        SKIP_MCP=true; shift ;;
+            --no-telemetry)    NO_TELEMETRY=true; shift ;;
             -h|--help)         PRINT_HELP=true; shift ;;
             *)                 ui_warn "Unknown argument: $1"; shift ;;
         esac
@@ -331,6 +336,19 @@ main() {
         die "--interactive requested but no TTY is reachable"
     fi
     ui_ok "Mode: $MODE"
+
+    # Resolve telemetry intent: --no-telemetry overrides everything; existing
+    # ~/.config/agentkey/telemetry-disabled file means already-opted-out.
+    local TELEMETRY_OPT_OUT_FILE="$HOME/.config/agentkey/telemetry-disabled"
+    if $NO_TELEMETRY; then
+        mkdir -p "$(dirname "$TELEMETRY_OPT_OUT_FILE")" 2>/dev/null || true
+        touch "$TELEMETRY_OPT_OUT_FILE" 2>/dev/null || true
+        ui_ok "Telemetry: disabled (--no-telemetry)"
+    elif [ -f "$TELEMETRY_OPT_OUT_FILE" ]; then
+        ui_ok "Telemetry: disabled (~/.config/agentkey/telemetry-disabled exists)"
+    else
+        ui_info "Telemetry: anonymous usage stats enabled (re-run with --no-telemetry to opt out)"
+    fi
 
     # Node check
     local NODE_OK=false NODE_VERSION NODE_MAJOR
