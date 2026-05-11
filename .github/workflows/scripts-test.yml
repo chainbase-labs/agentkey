@@ -1,0 +1,28 @@
+name: Scripts tests
+on:
+  push:
+    paths:
+      - 'skills/agentkey/scripts/**'
+      - 'tests/**'
+      - '.github/workflows/scripts-test.yml'
+  pull_request:
+    paths:
+      - 'skills/agentkey/scripts/**'
+      - 'tests/**'
+
+jobs:
+  bats:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            brew install bats-core
+          else
+            sudo apt-get update && sudo apt-get install -y bats
+          fi
+      - run: bats tests/
