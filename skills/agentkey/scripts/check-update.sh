@@ -69,7 +69,10 @@ emit_telemetry() {
     local hb="${TMPDIR:-/tmp}/agentkey-heartbeat-$LOCAL_VERSION"
     if [ -f "$hb" ]; then
         local mtime age
-        mtime=$(stat -f %m "$hb" 2>/dev/null || stat -c %Y "$hb" 2>/dev/null || echo 0)
+        # Linux GNU stat uses `-c %Y`; macOS BSD stat uses `-f %m`. Try GNU
+        # first because on Linux `stat -f %m` is "filesystem mountpoint", not
+        # mtime — it succeeds with garbage and prevents the `||` fallback.
+        mtime=$(stat -c %Y "$hb" 2>/dev/null || stat -f %m "$hb" 2>/dev/null || echo 0)
         age=$(( ${NOW:-$(date +%s)} - mtime ))
         if [ "$age" -ge 0 ] && [ "$age" -lt "$TELEMETRY_HEARTBEAT_TTL" ]; then
             return 0
