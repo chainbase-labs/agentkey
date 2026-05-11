@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Shared bats helpers — isolate HOME, TMPDIR, network for each test.
+# Shared bats helpers — isolate HOME, TMPDIR, network per test.
+# main 上的 check-update.sh 把版本内嵌在脚本里
+# (`LOCAL_VERSION="x.y.z" # x-release-please-version`)，本 helper 提供
+# `set_local_version` 直接覆盖那一行以模拟不同的本地版本。
 
 setup_isolated_env() {
     REPO_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
@@ -9,19 +12,13 @@ setup_isolated_env() {
     export XDG_CONFIG_HOME="$HOME/.config"
     mkdir -p "$HOME" "$TMPDIR" "$XDG_CONFIG_HOME/agentkey"
 
-    # Use a copy of the plugin root so tests can mutate version.txt etc
-    export PLUGIN_ROOT="$TEST_TMP/plugin"
-    mkdir -p "$PLUGIN_ROOT/skills/agentkey/scripts"
-    cp "$REPO_ROOT/skills/agentkey/scripts/check-update.sh" \
-       "$PLUGIN_ROOT/skills/agentkey/scripts/check-update.sh"
-    # version.txt may not exist yet (version is currently embedded in check-update.sh);
-    # later tasks will introduce it. Copy if present, otherwise skip silently.
-    if [ -f "$REPO_ROOT/version.txt" ]; then
-        cp "$REPO_ROOT/version.txt" "$PLUGIN_ROOT/version.txt"
-    fi
-    export CLAUDE_PLUGIN_ROOT="$PLUGIN_ROOT"
+    # Copy the script into the test sandbox so we can mutate LOCAL_VERSION.
+    export SCRIPT_DIR="$TEST_TMP/scripts"
+    export SCRIPT="$SCRIPT_DIR/check-update.sh"
+    mkdir -p "$SCRIPT_DIR"
+    cp "$REPO_ROOT/skills/agentkey/scripts/check-update.sh" "$SCRIPT"
 
-    # Block real network — every test must mock curl
+    # Block real network — every test must call mock_curl_release explicitly.
     mkdir -p "$TEST_TMP/bin"
     cat > "$TEST_TMP/bin/curl" <<'EOF'
 #!/usr/bin/env bash
@@ -44,4 +41,21 @@ mock_curl_release() {
 echo '{"tag_name":"$tag"}'
 EOF
     chmod +x "$TEST_TMP/bin/curl"
+}
+
+# Override the embedded LOCAL_VERSION in the sandboxed copy of check-update.sh.
+set_local_version() {
+    local v="$1"
+    # GNU sed and BSD sed both accept this in-place form on Linux/macOS via the
+    # trailing empty string trick: use a portable sed wrapper.
+    if sed --version >/dev/null 2>&1; then
+        sed -i "s/^LOCAL_VERSION=.*/LOCAL_VERSION=\"$v\" # x-release-please-version/" "$SCRIPT"
+    else
+        sed -i '' "s/^LOCAL_VERSION=.*/LOCAL_VERSION=\"$v\" # x-release-please-version/" "$SCRIPT"
+    fi
+}
+
+# Run the sandboxed check-update.sh and capture status + output.
+run_check_update() {
+    run bash "$SCRIPT" "$@"
 }
