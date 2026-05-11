@@ -162,8 +162,8 @@ Parameters:
   -SkipSkill        Skip the skill install step (only run MCP auth)
   -SkipMcp          Skip the MCP auth step (only install the skill)
   -NoTelemetry      Disable anonymous usage telemetry (writes
-                    ~/.config/agentkey/telemetry-disabled so the skill
-                    stays opted-out across runs)
+                    %USERPROFILE%\.config\agentkey\telemetry-disabled so
+                    the skill stays opted-out across runs)
   -Help             Show this help
 
 Behavior:
@@ -219,7 +219,7 @@ else {
 Write-Ok "Mode: $Mode"
 
 # Resolve telemetry intent: -NoTelemetry overrides everything; existing
-# ~/.config/agentkey/telemetry-disabled file means already-opted-out.
+# %USERPROFILE%\.config\agentkey\telemetry-disabled file means already-opted-out.
 $TelemetryOptOutFile = Join-Path $env:USERPROFILE '.config\agentkey\telemetry-disabled'
 if ($NoTelemetry) {
     New-Item -ItemType Directory -Path (Split-Path $TelemetryOptOutFile) -Force | Out-Null
@@ -375,30 +375,33 @@ if ($SkipMcp) {
     }
     Write-Host ''
 
-    # Telemetry context: server picks these up from env and captures
-    # install_completed. Always exported (even when opt-out), because
-    # AGENTKEY_TELEMETRY=0 is itself one of the signals the server reads.
-    $_hn    = [System.Net.Dns]::GetHostName()
-    $_user  = $env:USERNAME
-    $_input = "$_hn|windows|$_user"
-    $_bytes = [System.Text.Encoding]::UTF8.GetBytes($_input)
-    $_sha   = [System.Security.Cryptography.SHA256]::Create()
-    $_hash  = ($_sha.ComputeHash($_bytes) | ForEach-Object { $_.ToString('x2') }) -join ''
-    $DeviceFingerprint = $_hash.Substring(0, 16)
-
-    $DetectedAgents = Get-DetectedAgents
-    if (-not (Get-Variable -Name targets -Scope Script -ErrorAction SilentlyContinue)) { $targets = @() }
-
+    # Telemetry context for install_completed. Opt-out is honored at the
+    # SOURCE: when AGENTKEY_TELEMETRY=0, no other context env vars are
+    # exported — hostname-derived fingerprint, agent lists, and installer
+    # flags are never computed nor passed to the child `npx @agentkey/mcp`
+    # process. The server treats AGENTKEY_TELEMETRY=0 as a hard skip.
     if ($NoTelemetry -or (Test-Path -LiteralPath $TelemetryOptOutFile)) {
         $env:AGENTKEY_TELEMETRY = '0'
     } else {
         $env:AGENTKEY_TELEMETRY = '1'
+
+        $_hn    = [System.Net.Dns]::GetHostName()
+        $_user  = $env:USERNAME
+        $_input = "$_hn|windows|$_user"
+        $_bytes = [System.Text.Encoding]::UTF8.GetBytes($_input)
+        $_sha   = [System.Security.Cryptography.SHA256]::Create()
+        $_hash  = ($_sha.ComputeHash($_bytes) | ForEach-Object { $_.ToString('x2') }) -join ''
+        $DeviceFingerprint = $_hash.Substring(0, 16)
+
+        $DetectedAgents = Get-DetectedAgents
+        if (-not (Get-Variable -Name targets -Scope Script -ErrorAction SilentlyContinue)) { $targets = @() }
+
+        $env:AGENTKEY_INSTALL_SOURCE     = 'one_liner'
+        $env:AGENTKEY_DETECTED_AGENTS    = ($DetectedAgents -join ',')
+        $env:AGENTKEY_SELECTED_AGENTS    = ($targets -join ',')
+        $env:AGENTKEY_INSTALLER_FLAGS    = ($PSBoundParameters.Keys | ForEach-Object { "-$_" }) -join ','
+        $env:AGENTKEY_DEVICE_FINGERPRINT = $DeviceFingerprint
     }
-    $env:AGENTKEY_INSTALL_SOURCE     = 'one_liner'
-    $env:AGENTKEY_DETECTED_AGENTS    = ($DetectedAgents -join ',')
-    $env:AGENTKEY_SELECTED_AGENTS    = ($targets -join ',')
-    $env:AGENTKEY_INSTALLER_FLAGS    = ($PSBoundParameters.Keys | ForEach-Object { "-$_" }) -join ','
-    $env:AGENTKEY_DEVICE_FINGERPRINT = $DeviceFingerprint
 
     & npx -y $McpPackage @authArgs
     if ($LASTEXITCODE -ne 0) {

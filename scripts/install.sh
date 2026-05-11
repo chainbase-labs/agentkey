@@ -281,6 +281,10 @@ main() {
     FORCE_LOCAL=false
     local NO_TELEMETRY=false
 
+    # Snapshot original args before the parse loop shifts them away — needed
+    # later for AGENTKEY_INSTALLER_FLAGS env passthrough.
+    local _orig_args=("$@")
+
     while [ $# -gt 0 ]; do
         case "$1" in
             -y|--yes)          MODE=noninteractive; shift ;;
@@ -509,19 +513,26 @@ main() {
         fi
         echo
 
-        # Telemetry context: server picks these up from env and capture
-        # install_completed. Always exported (even when opt-out), because
-        # AGENTKEY_TELEMETRY=0 is itself one of the signals the server reads.
-        local _flags=""
-        for _f in "$@"; do _flags="${_flags:+$_flags,}$_f"; done
-        export AGENTKEY_TELEMETRY="$($NO_TELEMETRY && echo 0 || echo 1)"
-        # If the persistent opt-out file exists, force 0 regardless of flag.
-        [ -f "$TELEMETRY_OPT_OUT_FILE" ] && export AGENTKEY_TELEMETRY=0
-        export AGENTKEY_INSTALL_SOURCE="one_liner"
-        export AGENTKEY_DETECTED_AGENTS="$(detect_agents)"
-        export AGENTKEY_SELECTED_AGENTS="${TARGETS:-}"
-        export AGENTKEY_INSTALLER_FLAGS="$_flags"
-        export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
+        # Telemetry context for `install_completed`. Opt-out is honored at
+        # the SOURCE: when AGENTKEY_TELEMETRY=0, no other context env vars
+        # are exported — hostname-derived fingerprint, agent lists, and
+        # installer flags are never computed nor passed to the child
+        # `npx @agentkey/mcp` process. The server treats AGENTKEY_TELEMETRY=0
+        # as a hard skip.
+        if $NO_TELEMETRY || [ -f "$TELEMETRY_OPT_OUT_FILE" ]; then
+            export AGENTKEY_TELEMETRY=0
+        else
+            export AGENTKEY_TELEMETRY=1
+            local _flags=""
+            for _f in "${_orig_args[@]:-}"; do
+                _flags="${_flags:+$_flags,}$_f"
+            done
+            export AGENTKEY_INSTALL_SOURCE="one_liner"
+            export AGENTKEY_DETECTED_AGENTS="$(detect_agents)"
+            export AGENTKEY_SELECTED_AGENTS="${TARGETS:-}"
+            export AGENTKEY_INSTALLER_FLAGS="$_flags"
+            export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
+        fi
 
         if ! npx -y "$MCP_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
