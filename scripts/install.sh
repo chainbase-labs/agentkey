@@ -467,20 +467,6 @@ main() {
     ${MUTED}2.${NC} Ask it something that needs the internet:
        ${ACCENT}"What has Musk been tweeting about lately?"${NC}
 
-  ${BOLD}If your agent is NOT Claude Code / Claude Desktop / Cursor${NC}
-    The skill is installed, but you may need to paste this MCP snippet
-    into its config manually:
-
-    ${MUTED}{
-      "mcpServers": {
-        "agentkey": {
-          "command": "npx",
-          "args": ["-y", "@agentkey/mcp"],
-          "env": { "AGENTKEY_API_KEY": "ak_..." }
-        }
-      }
-    }${NC}
-
   ${BOLD}Docs${NC}       https://agentkey.app/docs
   ${BOLD}Uninstall${NC}  curl -fsSL https://agentkey.app/uninstall.sh | bash
 
