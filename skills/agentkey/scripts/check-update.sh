@@ -32,7 +32,7 @@ CURL_TIMEOUT=3
 # no dependency on CLAUDE_PLUGIN_ROOT or the skill's installed layout.
 # release-please syncs this line on every release via the `extra-files`
 # entry in release-please-config.json. Do not edit by hand.
-LOCAL_VERSION="1.2.4" # x-release-please-version
+LOCAL_VERSION="1.3.0" # x-release-please-version
 
 CACHE_FILE="${TMPDIR:-/tmp}/agentkey-update-check"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agentkey"
