@@ -74,9 +74,9 @@ If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> 
 
 **Step C — Run the upgrade.** Invoke:
 ```bash
-npx skills update chainbase-labs/agentkey
+npx skills update agentkey
 ```
-On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update chainbase-labs/agentkey` manually to retry." Either way, continue to step 2.
+On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update agentkey` manually to retry." Either way, continue to step 2.
 
 Then route by intent:
 - "setup"/"install"/"api key"/"reinstall" → **Setup**

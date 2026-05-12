@@ -154,7 +154,7 @@ Claude: AgentKey Skill updated to v1.1.0.
 
 ```bash
 # Refresh the skill content
-npx skills update chainbase-labs/agentkey
+npx skills update agentkey
 
 # Pin a specific version
 npx skills add chainbase-labs/agentkey@v1.0.0

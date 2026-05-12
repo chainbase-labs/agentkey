@@ -154,7 +154,7 @@ Claude: AgentKey Skill updated to v1.1.0.
 
 ```bash
 # 拉最新版的 Skill 内容
-npx skills update chainbase-labs/agentkey
+npx skills update agentkey
 
 # 锁定特定版本
 npx skills add chainbase-labs/agentkey@v1.0.0
