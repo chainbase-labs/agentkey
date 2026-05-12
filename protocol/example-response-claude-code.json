@@ -2,7 +2,7 @@
   "protocol_version": 1,
   "skill_version_latest": "1.3.0",
   "client_detected": "claude-code",
-  "update_doc_url": "https://agentkey.app/docs/upgrade",
+  "update_doc_url": "https://github.com/chainbase-labs/agentkey/releases/latest",
   "update_command": "npx -y skills update -g agentkey",
   "update_command_kind": "shell",
   "release_notes_url": "https://github.com/chainbase-labs/agentkey/releases/tag/v1.3.0"

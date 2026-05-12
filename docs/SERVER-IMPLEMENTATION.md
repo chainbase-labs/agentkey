@@ -132,9 +132,12 @@ type Recipe = { command: string; kind: "shell" | "manual_ui" };
 
 const RECIPES: Record<string, Recipe> = {
   "claude-code": { command: "npx -y skills update -g agentkey", kind: "shell" },
-  "claude":      { command: "bash <(curl -fsSL https://agentkey.app/update-desktop.sh)", kind: "shell" },
   "cursor":      { command: "npx -y skills update -g agentkey", kind: "shell" },
   "codex":       { command: "npx -y skills update -g agentkey", kind: "shell" },
+  // "claude" (Desktop) deliberately omitted — Desktop's sandbox skill path
+  // isn't reachable by `npx skills update`, and there's no first-party
+  // installer script yet. The skill rule falls back to update_doc_url
+  // (= the GitHub releases page) and instructs the user to download manually.
 };
 
 function normalizeClient(raw: string): string {
@@ -150,7 +153,7 @@ function normalizeClient(raw: string): string {
 }
 ```
 
-The Desktop one-liner currently points at a `bash <(curl ...)` because the only reliable way to find Desktop's sandbox path is to inspect `~/Library/Application Support/Claude/...` at runtime. That script is owned by the agentkey.app maintainers; until it ships, emit `update_command_kind: "manual_ui"` with the README URL instead.
+There is intentionally no Desktop recipe yet. The skill rule (Step C, branch A) handles a missing `update_command` by telling the user to download the latest release from GitHub manually. Adding a Desktop one-liner later is a non-breaking change — just add the row to `RECIPES` and ship a new server version; no protocol bump and no skill change needed.
 
 ## Step 4 — The tool itself
 
@@ -177,7 +180,7 @@ export async function handleSkillMeta() {
       protocol_version: 1 as const,
       skill_version_latest: "",
       client_detected: normalizeClient(getClientName()),
-      update_doc_url: "https://agentkey.app/docs/upgrade",
+      update_doc_url: "https://github.com/chainbase-labs/agentkey/releases/latest",
     };
   }
   const latest = await getLatestSkillVersion();   // never throws; "" on failure
@@ -187,7 +190,7 @@ export async function handleSkillMeta() {
     protocol_version: 1 as const,
     skill_version_latest: latest,
     client_detected: client,
-    update_doc_url: "https://agentkey.app/docs/upgrade",
+    update_doc_url: "https://github.com/chainbase-labs/agentkey/releases/latest",
     ...(recipe ? { update_command: recipe.command, update_command_kind: recipe.kind } : {}),
     ...(latest ? { release_notes_url: `https://github.com/chainbase-labs/agentkey/releases/tag/v${latest}` } : {}),
   };
@@ -217,7 +220,7 @@ export async function handleSkillMeta() {
       protocol_version: 1 as const,
       skill_version_latest: "",
       client_detected: "unknown",
-      update_doc_url: "https://agentkey.app/docs/upgrade",
+      update_doc_url: "https://github.com/chainbase-labs/agentkey/releases/latest",
     };
   }
   return response;

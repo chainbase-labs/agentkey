@@ -2,5 +2,5 @@
   "protocol_version": 1,
   "skill_version_latest": "",
   "client_detected": "claude-code",
-  "update_doc_url": "https://agentkey.app/docs/upgrade"
+  "update_doc_url": "https://github.com/chainbase-labs/agentkey/releases/latest"
 }

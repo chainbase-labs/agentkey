@@ -115,12 +115,12 @@ The tool MUST NOT throw under any of the above; throwing would crash the agent's
 | `client_detected` | `update_command_kind` | `update_command` |
 |---|---|---|
 | `claude-code`     | `shell`     | `npx -y skills update -g agentkey` |
-| `claude`          | `shell`     | `bash <(curl -fsSL https://agentkey.app/update-desktop.sh)` |
 | `cursor`          | `shell`     | `npx -y skills update -g agentkey` |
 | `codex`           | `shell`     | `npx -y skills update -g agentkey` |
-| `unknown`         | (omit)      | (omit) — agent falls back to `update_doc_url` |
+| `claude` (Desktop)| (omit)      | (omit) — skill falls back to `update_doc_url` (GitHub releases) for manual download |
+| `unknown`         | (omit)      | (omit) — skill falls back to `update_doc_url` |
 
-The Desktop one-liner is a server-side responsibility; the script it points at is responsible for locating the Desktop sandbox path and writing the new skill files. It is NOT this repo's responsibility, but the URL MUST be live before `update_command_kind: "shell"` is emitted for `client: "claude"`.
+Desktop deliberately omits a `shell` command: Desktop installs skills into a sandboxed `~/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin/<UUID>/...` path which is not reachable by `npx skills update`, and no first-party scripted upgrade exists yet. Until one ships, the skill rule directs Desktop users to download the release archive from GitHub and replace the files manually. When a Desktop installer ships, this row can be promoted to `kind: "shell"` without bumping `protocol_version`.
 
 ## Skill behavior (this repo)
 
