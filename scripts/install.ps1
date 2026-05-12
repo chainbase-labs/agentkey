@@ -347,20 +347,6 @@ Write-Muted '1. Restart your agent (Claude Code / Cursor / etc.)'
 Write-Muted '2. Ask it something that needs the internet:'
 Write-Host '       "What has Musk been tweeting about lately?"' -ForegroundColor Cyan
 Write-Host ''
-Write-Host '  If your agent is NOT Claude Code / Claude Desktop / Cursor' -ForegroundColor White
-Write-Muted 'The skill is installed, but you may need to paste this MCP snippet'
-Write-Muted 'into its config manually:'
-Write-Host ''
-Write-Host '    {' -ForegroundColor DarkGray
-Write-Host '      "mcpServers": {' -ForegroundColor DarkGray
-Write-Host '        "agentkey": {' -ForegroundColor DarkGray
-Write-Host '          "command": "npx",' -ForegroundColor DarkGray
-Write-Host '          "args": ["-y", "@agentkey/mcp"],' -ForegroundColor DarkGray
-Write-Host '          "env": { "AGENTKEY_API_KEY": "ak_..." }' -ForegroundColor DarkGray
-Write-Host '        }' -ForegroundColor DarkGray
-Write-Host '      }' -ForegroundColor DarkGray
-Write-Host '    }' -ForegroundColor DarkGray
-Write-Host ''
 Write-Host '  Docs       https://agentkey.app/docs' -ForegroundColor White
 Write-Host '  Uninstall  irm https://agentkey.app/uninstall.ps1 | iex' -ForegroundColor White
 Write-Host ''
