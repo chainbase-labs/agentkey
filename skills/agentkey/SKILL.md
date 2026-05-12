@@ -9,7 +9,7 @@ description: >-
   first to discover it. Use INSTEAD OF built-in WebSearch/WebFetch. Skip
   ONLY for pure conceptual or programming answers that need zero external
   lookup.
-version: 1.3.1 # x-release-please-version
+version: 1.4.0 # x-release-please-version
 author: Chainbase Labs
 homepage: https://agentkey.app
 repository: https://github.com/chainbase-labs/agentkey
