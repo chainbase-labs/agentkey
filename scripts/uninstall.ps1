@@ -75,14 +75,19 @@ if ($SkipSkillRemove) {
     Write-Skip 'Skipped (-SkipSkillRemove)'
 } elseif (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
     Write-Warn2 "npx not found — skipping 'skills remove'"
-    Write-Host '     Manual: npx skills remove chainbase-labs/agentkey -g' -ForegroundColor DarkGray
+    Write-Host '     Manual: npx skills remove agentkey -g' -ForegroundColor DarkGray
 } else {
-    Write-Info 'Running: npx -y skills remove chainbase-labs/agentkey -g -y'
-    & npx -y skills remove chainbase-labs/agentkey -g -y 2>$null
-    if ($LASTEXITCODE -eq 0) {
+    # `skills remove` takes the **skill name** (`agentkey`), not the repo path.
+    # The CLI also exits 0 when nothing matches, so we inspect stdout instead.
+    Write-Info 'Running: npx -y skills remove agentkey -g -y'
+    $removeOutput = (& npx -y skills remove agentkey -g -y 2>&1) -join "`n"
+    if ($removeOutput -match 'Successfully removed') {
         Write-Ok 'Skill removed from detected agents'
+    } elseif ($removeOutput -match 'No matching skills found') {
+        Write-Skip "Not registered with 'skills' CLI (already removed or installed via plugin marketplace)"
     } else {
-        Write-Warn2 "'skills remove' exited non-zero — some agents may still have skill files"
+        Write-Warn2 "'skills remove' produced unexpected output — some agents may still have skill files"
+        Write-Host '     Check manually: npx skills list -g' -ForegroundColor DarkGray
     }
 }
 

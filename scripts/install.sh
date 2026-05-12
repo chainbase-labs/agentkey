@@ -411,6 +411,27 @@ main() {
         if ! npx "${SKILLS_ARGS[@]}" < "$npx_stdin"; then
             die "Failed to install skill via 'skills' CLI"
         fi
+        # The skills CLI sometimes prints "Installation failed" and still
+        # exits 0 (e.g. network error during git clone). Verify the skill
+        # actually landed on disk before declaring success.
+        local _agentkey_found=false _dir
+        for _dir in \
+            "$HOME/.agents/skills/agentkey" \
+            "$HOME/.claude/skills/agentkey" \
+            "$HOME/.cursor/skills/agentkey" \
+            "$HOME/.codex/skills/agentkey" \
+            "$HOME/.gemini/skills/agentkey" \
+            "$HOME/.opencode/skills/agentkey" \
+            "$HOME/.openclaw/skills/agentkey" \
+            "$HOME/.qwen/skills/agentkey" \
+            "$HOME/.iflow/skills/agentkey" \
+            "$HOME/.windsurf/skills/agentkey" \
+            "$HOME/.warp/skills/agentkey"; do
+            [ -f "$_dir/SKILL.md" ] && { _agentkey_found=true; break; }
+        done
+        if ! $_agentkey_found; then
+            die "Skill install reported success but no agentkey SKILL.md was created — likely a network or git clone failure. Retry: npx -y skills add $SKILL_REPO -g -y"
+        fi
         ui_ok "Skill installed"
     else
         ui_step "2. Install the AgentKey skill"

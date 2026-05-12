@@ -295,6 +295,33 @@ if (-not $SkipSkill) {
 
     & npx @skillsArgs
     if ($LASTEXITCODE -ne 0) { Die "Failed to install skill via 'skills' CLI" }
+    # The skills CLI sometimes prints "Installation failed" and still
+    # exits 0 (e.g. network error during git clone). Verify the skill
+    # actually landed on disk before declaring success.
+    $userHome = [Environment]::GetFolderPath('UserProfile')
+    $candidatePaths = @(
+        '.agents\skills\agentkey',
+        '.claude\skills\agentkey',
+        '.cursor\skills\agentkey',
+        '.codex\skills\agentkey',
+        '.gemini\skills\agentkey',
+        '.opencode\skills\agentkey',
+        '.openclaw\skills\agentkey',
+        '.qwen\skills\agentkey',
+        '.iflow\skills\agentkey',
+        '.windsurf\skills\agentkey',
+        '.warp\skills\agentkey'
+    )
+    $agentkeyFound = $false
+    foreach ($rel in $candidatePaths) {
+        if (Test-Path (Join-Path $userHome (Join-Path $rel 'SKILL.md'))) {
+            $agentkeyFound = $true
+            break
+        }
+    }
+    if (-not $agentkeyFound) {
+        Die "Skill install reported success but no agentkey SKILL.md was created — likely a network or git clone failure. Retry: npx -y skills add $SkillRepo -g -y"
+    }
     Write-Ok 'Skill installed'
 } else {
     Write-Step '2. Install the AgentKey skill'
