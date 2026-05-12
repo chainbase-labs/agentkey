@@ -144,13 +144,38 @@ Just top up. No auto-renewal, no hidden charges.
 <details>
 <summary><b>How do I update?</b></summary>
 
-**You don't have to — updates are automatic by default.** Your MCP config uses `npx -y @agentkey/mcp`, which re-resolves to the latest published version every time your agent restarts. In Claude Code plugin mode, AgentKey also checks GitHub Releases at runtime and applies a silent in-place update, notifying you:
+There are two pieces and they update differently:
 
-```
-Claude: AgentKey Skill updated to v1.1.0.
+- **MCP server** (`@agentkey/mcp` npm package): always up to date. Your MCP config runs it as `npx -y @agentkey/mcp`, which re-resolves to the latest published version every time your agent restarts. You never have to touch this.
+
+- **Skill files** (`SKILL.md` + helpers): how this updates depends on your client.
+
+### Claude Code
+
+Updates are automatic. On the first call of a session the skill runs a silent version check; if a new release is available it prompts you to upgrade and (with your consent) runs `npx skills update -g agentkey`.
+
+### Claude Desktop, Cursor, and other clients without an inline Bash tool
+
+The skill cannot run the inline check itself, but starting in v1.4.0 the **MCP server publishes the latest skill version via a dedicated metadata tool (`agentkey_skill_meta`)**. Your agent calls it once per session, compares against this skill's own version, and prompts you to upgrade with the exact command for your client. See [protocol/skill-meta-v1.md](./protocol/skill-meta-v1.md) for the protocol details.
+
+**One-time bootstrap on Desktop:** if you're stuck on a pre-1.4.0 skill in Claude Desktop, the metadata tool exists but your skill rule doesn't know how to read it. Bring yourself current once with:
+
+```bash
+# Replace <UUID1>/<UUID2> with the actual session folder under skills-plugin
+# (usually there's just one; pick the one that contains skills/agentkey/SKILL.md)
+DESKTOP_BASE="$HOME/Library/Application Support/Claude/local-agent-mode-sessions/skills-plugin"
+LATEST_REPO_ZIP=$(mktemp -d)/agentkey.tar.gz
+curl -fsSL https://github.com/chainbase-labs/agentkey/archive/refs/heads/main.tar.gz -o "$LATEST_REPO_ZIP"
+tar -xzf "$LATEST_REPO_ZIP" -C "$(dirname "$LATEST_REPO_ZIP")"
+find "$DESKTOP_BASE" -type d -path "*/skills/agentkey" 2>/dev/null | while read -r dst; do
+  cp -R "$(dirname "$LATEST_REPO_ZIP")"/agentkey-main/skills/agentkey/. "$dst/"
+done
+# Then fully quit and restart Claude Desktop.
 ```
 
-**If you'd rather force it manually:**
+After this one bootstrap, future versions will be discovered automatically via the metadata tool.
+
+### Force manual update (any client)
 
 ```bash
 # Refresh the skill content
@@ -159,6 +184,8 @@ npx skills update agentkey
 # Pin a specific version
 npx skills add chainbase-labs/agentkey@v1.0.0
 ```
+
+Note: `npx skills update` writes to `~/.agents/skills/agentkey` and `~/.claude/skills/agentkey`, which is where Claude Code reads from. **Claude Desktop reads from its own sandbox path** and is not touched by `npx skills update` — use the Desktop bootstrap command above for Desktop.
 
 Re-run `npx -y @agentkey/mcp --auth-login` only when you want to rotate your API key.
 

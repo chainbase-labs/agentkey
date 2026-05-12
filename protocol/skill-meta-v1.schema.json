@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/chainbase-labs/agentkey/main/protocol/skill-meta-v1.schema.json",
+  "title": "SkillMetaResponse v1",
+  "description": "Wire format for the agentkey_skill_meta MCP tool. See protocol/skill-meta-v1.md for the full contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "skill_version_latest",
+    "client_detected",
+    "update_doc_url"
+  ],
+  "properties": {
+    "protocol_version": {
+      "description": "Protocol version. v1 servers MUST emit literal 1.",
+      "const": 1
+    },
+    "skill_version_latest": {
+      "description": "Latest published skill release, semver without 'v' prefix. Empty string is allowed only when the server cannot determine the latest version (e.g. offline, GitHub rate-limited).",
+      "type": "string",
+      "pattern": "^$|^[0-9]+\\.[0-9]+\\.[0-9]+(-[0-9A-Za-z.-]+)?(\\+[0-9A-Za-z.-]+)?$"
+    },
+    "client_detected": {
+      "description": "Lowercase short name of the MCP client derived from initialize.clientInfo.name. Use 'unknown' when clientInfo is absent or unrecognized.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "update_doc_url": {
+      "description": "Stable documentation URL describing how to upgrade. MUST be present in every response, regardless of client.",
+      "type": "string",
+      "pattern": "^https?://"
+    },
+    "update_command": {
+      "description": "Optional. Concrete one-line upgrade instruction for the detected client. When present, update_command_kind MUST also be present.",
+      "type": "string",
+      "minLength": 1
+    },
+    "update_command_kind": {
+      "description": "Optional. Indicates how to interpret update_command. Skill rules treat unknown future kinds as 'manual_ui'.",
+      "type": "string",
+      "enum": ["shell", "manual_ui"]
+    },
+    "release_notes_url": {
+      "description": "Optional. URL of the human-readable release notes for skill_version_latest.",
+      "type": "string",
+      "pattern": "^https?://"
+    }
+  },
+  "dependentRequired": {
+    "update_command": ["update_command_kind"],
+    "update_command_kind": ["update_command"]
+  }
+}

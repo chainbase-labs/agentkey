@@ -1,0 +1,84 @@
+name: protocol-validate
+
+# Validates that every example fixture under protocol/ conforms to
+# skill-meta-v1.schema.json. Catches the case where someone updates the schema
+# but forgets to update the fixtures (or vice versa). When @agentkey/mcp
+# eventually ships its vendored copy of the same schema, a second job here will
+# diff against it to detect drift in the other direction.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'protocol/**'
+      - '.github/workflows/protocol-validate.yml'
+  pull_request:
+    paths:
+      - 'protocol/**'
+      - '.github/workflows/protocol-validate.yml'
+
+jobs:
+  validate-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate every example fixture against the schema
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fixtures=(protocol/example-*.json)
+          if [ ${#fixtures[@]} -eq 0 ]; then
+            echo "::error::no fixtures found under protocol/example-*.json"
+            exit 1
+          fi
+          for f in "${fixtures[@]}"; do
+            echo "=== $f ==="
+            npx -y ajv-cli@5 validate \
+              --spec=draft2020 \
+              -s protocol/skill-meta-v1.schema.json \
+              -d "$f"
+          done
+
+      - name: Schema must reject known bad payloads (regression guard)
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          # protocol_version must be 1
+          echo '{"protocol_version":2,"skill_version_latest":"1.0.0","client_detected":"claude","update_doc_url":"https://x"}' > "$tmp/bad-v2.json"
+          # update_command requires update_command_kind (dependentRequired)
+          echo '{"protocol_version":1,"skill_version_latest":"1.0.0","client_detected":"claude","update_doc_url":"https://x","update_command":"echo hi"}' > "$tmp/bad-no-kind.json"
+          # version string must not have a 'v' prefix
+          echo '{"protocol_version":1,"skill_version_latest":"v1.0.0","client_detected":"claude","update_doc_url":"https://x"}' > "$tmp/bad-vprefix.json"
+          # client_detected must be lowercase short identifier
+          echo '{"protocol_version":1,"skill_version_latest":"1.0.0","client_detected":"Claude Desktop","update_doc_url":"https://x"}' > "$tmp/bad-caps.json"
+
+          fail=0
+          for f in "$tmp"/bad-*.json; do
+            if npx -y ajv-cli@5 validate --spec=draft2020 -s protocol/skill-meta-v1.schema.json -d "$f" >/dev/null 2>&1; then
+              echo "::error::$f should have been rejected by the schema but wasn't"
+              fail=1
+            else
+              echo "✓ correctly rejected $(basename "$f")"
+            fi
+          done
+          exit $fail
+
+  spec-cross-references:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Spec doc references all fixtures
+        run: |
+          set -euo pipefail
+          # Every fixture file should be mentioned in the spec's "See also" block,
+          # so adding a new fixture without doc-cross-referencing it fails CI.
+          missing=0
+          for f in protocol/example-*.json; do
+            base=$(basename "$f")
+            if ! grep -q "$base" protocol/skill-meta-v1.md; then
+              echo "::error file=protocol/skill-meta-v1.md::fixture $base is not referenced in the spec"
+              missing=1
+            fi
+          done
+          exit $missing
