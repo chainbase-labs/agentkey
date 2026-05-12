@@ -22,24 +22,44 @@ license: MIT
 
 **Step 0 (always run first):**
 
-1. Run the version check silently (cached — repeat calls are <10ms):
-   ```bash
-   bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
-   ```
-   - `UP_TO_DATE` or empty → continue silently to step 2.
-   - `UPGRADE_AVAILABLE <old> <new>` → run the **Upgrade flow** below, then continue to step 2.
+0.A — **Server beacon check (cross-client; runs on every client including Claude Desktop):**
 
-2. Confirm the 4 MCP tools — `list_tools`, `find_tools`, `describe_tool`, `execute_tool` — are visible in the current toolset. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
+If the tool `agentkey_skill_meta` is visible in `list_tools`, call it **once** with `{}`. Otherwise skip to 0.B.
+
+The response is structured JSON conforming to [protocol/skill-meta-v1](https://github.com/chainbase-labs/agentkey/blob/main/protocol/skill-meta-v1.md). Apply these rules **in order**:
+
+1. Response missing, threw, or not valid JSON → skip silently to 0.B.
+2. `response.protocol_version !== 1` → only honor `update_doc_url`; if present, remember it as a fallback for any prompt below.
+3. `response.skill_version_latest === ""` → server admitted it can't tell (offline / rate-limited). Skip to 0.B without prompting.
+4. `response.skill_version_latest` equals this SKILL.md's frontmatter `version:` field (read it from the top of this file) → up to date. Skip to 0.B.
+5. Otherwise (versions differ): run the **Upgrade flow** below using `response.update_command` / `response.update_command_kind` / `response.update_doc_url`. **Never** call `agentkey_skill_meta` a second time in the same session.
+
+0.B — **Inline check (compatibility path for clients with a Bash tool, e.g. Claude Code):**
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
+```
+
+- `UP_TO_DATE` or empty → continue silently to 0.C.
+- `UPGRADE_AVAILABLE <old> <new>` → if 0.A already prompted the user this session, skip; else run the legacy **Upgrade flow** below with the new version, then continue to 0.C.
+
+If your client has no Bash tool (Claude Desktop, some web-based clients), this step is a no-op — that's fine, 0.A already covered it.
+
+0.C — **Verify MCP tools.** Confirm `list_tools`, `find_tools`, `describe_tool`, `execute_tool` are visible. If **any** are missing → **Setup** (regardless of what the user asked). Do not attempt Query without all 4.
 
 ### Upgrade flow
 
-Triggered when `check-update.sh` outputs `UPGRADE_AVAILABLE <old> <new>`. Substitute `<old>` and `<new>` with the actual versions parsed from that line.
+Triggered by either:
+- **(A)** Step 0.A: `agentkey_skill_meta` returned a `skill_version_latest` different from this SKILL.md's frontmatter version. Use that response's `update_command` (when present) instead of the default `npx skills update` command below. The `<old>` is this SKILL.md's frontmatter version; `<new>` is `response.skill_version_latest`.
+- **(B)** Step 0.B: `check-update.sh` printed `UPGRADE_AVAILABLE <old> <new>`. Use `<old>` and `<new>` from that line.
+
+Below, `<old>` and `<new>` refer to whichever pair was resolved above.
 
 **Step A — Check for auto-upgrade opt-in.** Run:
 ```bash
 if [ "${AGENTKEY_AUTO_UPGRADE:-0}" = "1" ] || [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/auto-upgrade" ]; then echo AUTO=1; fi
 ```
-If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> → v\<new\>…", run **Step C**, then continue to step 2. **Do not** show the AskUserQuestion prompt.
+If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> → v\<new\>…", run **Step C**, then continue to step 0.C. **Do not** show the AskUserQuestion prompt.
 
 **Step B — Otherwise, prompt the user with AskUserQuestion:**
 - Question: `AgentKey v<new> is available (currently on v<old>). Upgrade now?`
@@ -65,18 +85,24 @@ If the output is `AUTO=1`: tell the user once "Auto-upgrading AgentKey v\<old\> 
     mkdir -p "$_CFG" && echo "$_NEW $_LEVEL $(date +%s)" > "$_SNOOZE"
     echo "SNOOZED_LEVEL=$_LEVEL"
     ```
-    Translate the level into a duration for the user — `SNOOZED_LEVEL=1` → "Next reminder in 24h", `2` → "in 48h", `3` → "in 1 week". Continue to step 2 — **do not** upgrade.
+    Translate the level into a duration for the user — `SNOOZED_LEVEL=1` → "Next reminder in 24h", `2` → "in 48h", `3` → "in 1 week". Continue to step 0.C — **do not** upgrade.
   - **`Never ask again`** → run:
     ```bash
     mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/update-disabled"
     ```
-    Tell the user "Update checks disabled. Remove `~/.config/agentkey/update-disabled` to re-enable." Continue to step 2 — **do not** upgrade.
+    Tell the user "Update checks disabled. Remove `~/.config/agentkey/update-disabled` to re-enable." Continue to step 0.C — **do not** upgrade.
 
-**Step C — Run the upgrade.** Invoke:
+**Step C — Run the upgrade.**
+
+If trigger was (A) and `response.update_command` is present:
+- `update_command_kind === "shell"` → Display the command verbatim and offer to run it in Bash if a Bash tool is available. If no Bash tool (e.g. Claude Desktop), instruct the user to copy-paste it into their terminal.
+- `update_command_kind === "manual_ui"` (or anything else) → Display `response.update_command` as instructions; do **not** attempt to execute. Always also offer `response.update_doc_url` as the doc link.
+
+If trigger was (B), or trigger (A) had no `update_command` (only `update_doc_url`), fall back to the default Claude-Code-friendly path:
 ```bash
 npx skills update agentkey
 ```
-On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update agentkey` manually to retry." Either way, continue to step 2.
+On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update agentkey` manually to retry." Either way, continue to step 0.C.
 
 Then route by intent:
 - "setup"/"install"/"api key"/"reinstall" → **Setup**
