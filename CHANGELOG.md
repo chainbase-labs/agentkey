@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1](https://github.com/chainbase-labs/Agentkey/compare/v1.3.0...v1.3.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* **skill:** publish 1.3.1 with corrected npx skills update command ([#36](https://github.com/chainbase-labs/Agentkey/issues/36)) ([d4cfef6](https://github.com/chainbase-labs/Agentkey/commit/d4cfef6f899f76e9686789c8917cc537a6afdbb7))
+
 ## [1.3.0](https://github.com/chainbase-labs/Agentkey/compare/v1.2.4...v1.3.0) (2026-05-12)
 
 
