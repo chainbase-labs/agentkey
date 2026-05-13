@@ -95,13 +95,61 @@ if ($SkipSkillRemove) {
 Write-Step '2. MCP server entries'
 
 $home2 = [Environment]::GetFolderPath('UserProfile')
-$mcpConfigs = @(
+
+# All known JSON MCP config paths across the 16 auto-supported agents. The
+# scrub logic is schema-agnostic — it walks the JSON tree and drops any
+# dict key whose name exactly matches our server name (current + legacy),
+# so the same scrubber handles every dialect: mcpServers, mcp,
+# amp.mcpServers, projects.X.mcpServers, etc. Keep this list aligned with
+# AGENT_REGISTRY in AgentKey-Server/cli/src/lib/mcp-clients.ts.
+$mcpJsonConfigs = @(
     (Join-Path $home2 '.claude.json'),                                            # Claude Code
     (Join-Path $home2 '.cursor\mcp.json'),                                        # Cursor
-    (Join-Path $env:APPDATA 'Claude\claude_desktop_config.json')                  # Claude Desktop
+    (Join-Path $env:APPDATA 'Claude\claude_desktop_config.json'),                 # Claude Desktop
+    (Join-Path $home2 '.gemini\settings.json'),                                   # Gemini CLI
+    (Join-Path $home2 '.qwen\settings.json'),                                     # Qwen Code
+    (Join-Path $home2 '.iflow\settings.json'),                                    # iFlow CLI
+    (Join-Path $home2 '.kimi\mcp.json'),                                          # Kimi CLI
+    (Join-Path $home2 '.kiro\settings\mcp.json'),                                 # Kiro CLI
+    (Join-Path $home2 '.codeium\windsurf\mcp_config.json'),                       # Windsurf
+    (Join-Path $home2 '.warp\.mcp.json'),                                         # Warp
+    (Join-Path $env:APPDATA 'opencode\opencode.json'),                            # OpenCode  (mcp.<name>)
+    (Join-Path $env:APPDATA 'amp\settings.json'),                                 # Amp       (amp.mcpServers.<name>)
+    (Join-Path $env:APPDATA 'crush\crush.json')                                   # Crush     (mcp.<name>)
 )
 
-function Clean-McpConfig($path) {
+# TOML config — handled separately (no built-in TOML parser pre-PS7.4).
+$mcpTomlConfigs = @(
+    (Join-Path $home2 '.codex\config.toml')                                       # Codex CLI
+)
+
+$ServerNames = @('agentkey', 'agentkey.app agentkey')
+
+# Schema-agnostic recursive scrub: drop any dict key whose lowercased name
+# is in $ServerNames. Covers mcpServers / mcp / amp.mcpServers / projects.*
+# in one pass. Exact match (not substring) so we don't nuke unrelated user
+# keys like "my-agentkey-helper".
+function Scrub-Mcp($node) {
+    $removed = 0
+    if ($node -is [System.Management.Automation.PSCustomObject]) {
+        $keys = @($node.PSObject.Properties.Name)
+        foreach ($k in $keys) {
+            if ($ServerNames -contains $k.ToLower()) {
+                $node.PSObject.Properties.Remove($k)
+                $removed++
+            } else {
+                $removed += Scrub-Mcp $node.$k
+            }
+        }
+    } elseif ($node -is [System.Collections.IList]) {
+        foreach ($item in $node) {
+            $removed += Scrub-Mcp $item
+        }
+    }
+    return $removed
+}
+
+function Clean-McpJsonConfig($path) {
     if (-not (Test-Path $path)) {
         Write-Skip "$([System.IO.Path]::GetFileName($path)) not found"
         return
@@ -113,35 +161,7 @@ function Clean-McpConfig($path) {
         Write-Warn2 "Could not parse $path — skipping"
         return
     }
-
-    $removed = 0
-
-    if ($obj.mcpServers) {
-        $keys = @($obj.mcpServers.PSObject.Properties.Name)
-        foreach ($k in $keys) {
-            if ($k -match 'agentkey') {
-                $obj.mcpServers.PSObject.Properties.Remove($k)
-                $removed++
-            }
-        }
-    }
-    # Per-project mcpServers (Claude Code ~/.claude.json shape)
-    if ($obj.projects) {
-        $projNames = @($obj.projects.PSObject.Properties.Name)
-        foreach ($pn in $projNames) {
-            $proj = $obj.projects.$pn
-            if ($proj.mcpServers) {
-                $pkeys = @($proj.mcpServers.PSObject.Properties.Name)
-                foreach ($k in $pkeys) {
-                    if ($k -match 'agentkey') {
-                        $proj.mcpServers.PSObject.Properties.Remove($k)
-                        $removed++
-                    }
-                }
-            }
-        }
-    }
-
+    $removed = Scrub-Mcp $obj
     if ($removed -gt 0) {
         ($obj | ConvertTo-Json -Depth 100) | Set-Content -Path $path -Encoding UTF8
         Write-Ok "Removed $removed entry/entries from $path"
@@ -150,7 +170,57 @@ function Clean-McpConfig($path) {
     }
 }
 
-foreach ($cfg in $mcpConfigs) { Clean-McpConfig $cfg }
+foreach ($cfg in $mcpJsonConfigs) { Clean-McpJsonConfig $cfg }
+
+# Codex TOML — line-scan to splice out our [mcp_servers.agentkey] block
+# (bare + legacy quoted name). Done in pure PowerShell — no TOML lib needed
+# because we only ever delete, never re-emit unrelated tables.
+function Clean-McpTomlConfig($path) {
+    if (-not (Test-Path $path)) {
+        Write-Skip "$([System.IO.Path]::GetFileName($path)) not found"
+        return
+    }
+    $lines = Get-Content $path
+    $headerPattern = '^\s*\[\s*mcp_servers\s*\.\s*(agentkey|"agentkey\.app AgentKey")\s*\]\s*$'
+    $anyHeader     = '^\s*\[[^\]]+\]\s*$'
+    if (-not ($lines -match $headerPattern)) {
+        Write-Skip "No agentkey block in $path"
+        return
+    }
+    $out = New-Object System.Collections.Generic.List[string]
+    $skip = $false
+    foreach ($line in $lines) {
+        if ($line -match $headerPattern) { $skip = $true; continue }
+        if ($skip -and $line -match $anyHeader) { $skip = $false }
+        if (-not $skip) { $out.Add($line) }
+    }
+    Set-Content -Path $path -Value $out -Encoding UTF8
+    Write-Ok "Removed agentkey block from $path"
+}
+
+foreach ($cfg in $mcpTomlConfigs) { Clean-McpTomlConfig $cfg }
+
+# ── 2b. CLI-registered agents (droid / openclaw) ─────────────────────────
+# These two have no documented file-edit path; we registered them via their
+# CLIs so we have to unregister the same way. Best-effort — silently skip
+# if the CLI isn't on PATH or the entry was never created.
+Write-Step '2b. CLI-registered agents (droid / openclaw)'
+
+if (Get-Command droid -ErrorAction SilentlyContinue) {
+    & droid mcp remove agentkey 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Ok 'Removed agentkey from droid (`droid mcp remove`)' }
+    else { Write-Skip 'No agentkey entry in droid (or already removed)' }
+} else {
+    Write-Skip 'droid CLI not on PATH'
+}
+
+if (Get-Command openclaw -ErrorAction SilentlyContinue) {
+    & openclaw mcp unset agentkey 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { Write-Ok 'Removed agentkey from openclaw (`openclaw mcp unset`)' }
+    else { Write-Skip 'No agentkey entry in openclaw (or already removed)' }
+} else {
+    Write-Skip 'openclaw CLI not on PATH'
+}
 
 # ── 3. Claude Code plugin registrations (legacy) ─────────────────────────
 Write-Step '3. Claude Code plugin registrations (legacy)'

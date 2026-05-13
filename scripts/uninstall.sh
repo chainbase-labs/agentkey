@@ -96,24 +96,51 @@ fi
 step "2. MCP server entries"
 
 OS="$(uname -s)"
-MCP_CONFIGS=(
+
+# All known JSON MCP config paths across the 16 auto-supported agents. The
+# scrub logic is intentionally schema-agnostic — it walks the JSON tree and
+# drops any key named "agentkey" / "agentkey.app AgentKey" wherever it
+# finds it, so the same scrubber handles:
+#   - mcpServers.agentkey         (Claude Code, Desktop, Cursor, Gemini, Windsurf, Warp, Qwen, iFlow, Kimi, Kiro)
+#   - projects.*.mcpServers       (Claude Code's per-project shape)
+#   - mcp.agentkey                (OpenCode, Crush)
+#   - amp.mcpServers.agentkey     (Amp's flat dotted key)
+# Keep this list in sync with AGENT_REGISTRY in
+# AgentKey-Server/cli/src/lib/mcp-clients.ts.
+MCP_JSON_CONFIGS=(
     "$HOME/.claude.json"                                                  # Claude Code
     "$HOME/.cursor/mcp.json"                                              # Cursor
+    "$HOME/.gemini/settings.json"                                         # Gemini CLI
+    "$HOME/.qwen/settings.json"                                           # Qwen Code
+    "$HOME/.iflow/settings.json"                                          # iFlow CLI
+    "$HOME/.kimi/mcp.json"                                                # Kimi CLI
+    "$HOME/.kiro/settings/mcp.json"                                       # Kiro CLI
+    "$HOME/.codeium/windsurf/mcp_config.json"                             # Windsurf
+    "$HOME/.warp/.mcp.json"                                               # Warp
+    "$HOME/.config/opencode/opencode.json"                                # OpenCode  (mcp.<name>)
+    "$HOME/.config/amp/settings.json"                                     # Amp       (amp.mcpServers.<name>)
+    "$HOME/.config/crush/crush.json"                                      # Crush     (mcp.<name>)
 )
 if [ "$OS" = "Darwin" ]; then
-    MCP_CONFIGS+=("$HOME/Library/Application Support/Claude/claude_desktop_config.json")
+    MCP_JSON_CONFIGS+=("$HOME/Library/Application Support/Claude/claude_desktop_config.json")
 else
-    MCP_CONFIGS+=("$HOME/.config/Claude/claude_desktop_config.json")
+    MCP_JSON_CONFIGS+=("$HOME/.config/Claude/claude_desktop_config.json")
 fi
+
+# TOML configs — handled separately because we can't parse TOML without a
+# library. We splice out `[mcp_servers.agentkey]` blocks via line-scan.
+MCP_TOML_CONFIGS=(
+    "$HOME/.codex/config.toml"                                            # Codex CLI
+)
 
 have_python() { command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1; }
 py() { if command -v python3 >/dev/null 2>&1; then python3 "$@"; else python "$@"; fi; }
 
 if ! have_python; then
     warn "python not found — skipping JSON cleanup; edit these files manually:"
-    for f in "${MCP_CONFIGS[@]}"; do [ -f "$f" ] && echo "     $f"; done
+    for f in "${MCP_JSON_CONFIGS[@]}"; do [ -f "$f" ] && echo "     $f"; done
 else
-    for cfg in "${MCP_CONFIGS[@]}"; do
+    for cfg in "${MCP_JSON_CONFIGS[@]}"; do
         if [ ! -f "$cfg" ]; then
             skipped "$(basename "$cfg") not found"
             continue
@@ -126,18 +153,27 @@ try:
 except Exception as e:
     print(f"ERROR: {e}"); sys.exit(0)
 
-removed = 0
-# Top-level mcpServers.agentkey*
-if isinstance(d, dict):
-    for k in list(d.get('mcpServers', {}).keys()):
-        if 'agentkey' in k.lower():
-            del d['mcpServers'][k]; removed += 1
-    # Per-project entries (Claude Code ~/.claude.json shape)
-    for proj in d.get('projects', {}).values():
-        if not isinstance(proj, dict): continue
-        for k in list(proj.get('mcpServers', {}).keys()):
-            if 'agentkey' in k.lower():
-                del proj['mcpServers'][k]; removed += 1
+# Schema-agnostic recursive scrub: drop any dict key whose name exactly
+# matches one of our known MCP server names (current + legacy). Covers every
+# dialect we write: mcpServers.agentkey, mcp.agentkey,
+# amp.mcpServers.agentkey, projects.X.mcpServers.agentkey, etc.
+# Exact-match (not substring) so we don't nuke unrelated user keys like
+# "agentkey-helper" or "my-agentkey-config".
+NAMES = {'agentkey', 'agentkey.app agentkey'}
+def scrub(obj):
+    removed = 0
+    if isinstance(obj, dict):
+        for k in list(obj.keys()):
+            if k.lower() in NAMES:
+                del obj[k]; removed += 1
+            else:
+                removed += scrub(obj[k])
+    elif isinstance(obj, list):
+        for item in obj:
+            removed += scrub(item)
+    return removed
+
+removed = scrub(d)
 if removed:
     with open(path, 'w') as f:
         json.dump(d, f, indent=2)
@@ -152,6 +188,54 @@ EOF
             warn "Failed to update $cfg: $RESULT"
         fi
     done
+fi
+
+# Codex TOML: splice out [mcp_servers.agentkey] blocks (bare + legacy quoted).
+# Bash-only — no Python dependency — because we never parse, only line-edit.
+for cfg in "${MCP_TOML_CONFIGS[@]}"; do
+    if [ ! -f "$cfg" ]; then
+        skipped "$(basename "$cfg") not found"
+        continue
+    fi
+    if ! grep -qE '^\s*\[\s*mcp_servers\s*\.\s*(agentkey|"agentkey\.app AgentKey")\s*\]' "$cfg" 2>/dev/null; then
+        skipped "No agentkey block in $cfg"
+        continue
+    fi
+    # Line-scan: drop from our header line to the next [section] header or EOF.
+    awk '
+        BEGIN { skip = 0 }
+        /^[[:space:]]*\[[[:space:]]*mcp_servers[[:space:]]*\.[[:space:]]*(agentkey|"agentkey\.app AgentKey")[[:space:]]*\][[:space:]]*$/ { skip = 1; next }
+        /^[[:space:]]*\[[^]]+\][[:space:]]*$/ { skip = 0 }
+        !skip { print }
+    ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+    ok "Removed agentkey block from $cfg"
+done
+
+# ── 2b. CLI-registered agents (droid / openclaw) ─────────────────────────
+# These two agents have no documented file-edit path; we registered them via
+# their own CLIs (`droid mcp add`, `openclaw mcp set`), so we have to use the
+# CLI to unregister. Best-effort — silently skip if the CLI isn't on PATH or
+# the entry was never created.
+step "2b. CLI-registered agents (droid / openclaw)"
+
+if command -v droid >/dev/null 2>&1; then
+    if droid mcp remove agentkey >/dev/null 2>&1; then
+        ok "Removed agentkey from droid (\`droid mcp remove\`)"
+    else
+        skipped "No agentkey entry in droid (or already removed)"
+    fi
+else
+    skipped "droid CLI not on PATH"
+fi
+
+if command -v openclaw >/dev/null 2>&1; then
+    if openclaw mcp unset agentkey >/dev/null 2>&1; then
+        ok "Removed agentkey from openclaw (\`openclaw mcp unset\`)"
+    else
+        skipped "No agentkey entry in openclaw (or already removed)"
+    fi
+else
+    skipped "openclaw CLI not on PATH"
 fi
 
 # ── 3. Claude Code plugin registrations (legacy) ─────────────────────────

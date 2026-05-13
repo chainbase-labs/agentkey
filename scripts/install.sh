@@ -27,28 +27,52 @@ NODE_MIN_MAJOR=18
 # pre-detected — the user can pass --all-agents or --only to include them.
 # Sync source: https://github.com/vercel-labs/skills (Supported Agents table).
 #
+# IMPORTANT: ids here MUST match the `--only` ids accepted by both
+# `npx skills add -a` and `npx -y @agentkey/cli --auth-login --only`.
+# That alignment is what lets the installer drive both halves with one list.
+#
+# `claude-desktop` is the documented exception — it isn't in the skills CLI
+# (Desktop installs skills into a sandbox path the CLI can't write), but
+# Desktop's MCP config IS auto-writable, so we list it separately and pass
+# it ONLY to the MCP --only filter (see SKILL_TARGETS / MCP_TARGETS below).
+#
 # Format: <agent-id>|<marker>[,<marker>...]
 #   marker types:  cmd:foo            — `command -v foo`
 #                  path:/abs/or/~path — file or dir exists (~ expands to $HOME)
 AGENT_MARKERS=(
-    "claude-code|path:~/.claude.json,cmd:claude,path:~/Library/Application Support/Claude,path:~/.config/Claude"
+    "claude-code|path:~/.claude.json,cmd:claude"
+    "claude-desktop|path:/Applications/Claude.app,path:~/Applications/Claude.app,path:~/Library/Application Support/Claude/claude_desktop_config.json,path:~/Library/Application Support/Claude,path:~/.config/Claude/claude_desktop_config.json,path:~/.config/Claude"
     "cursor|path:~/.cursor,cmd:cursor"
     "codex|path:~/.codex,cmd:codex"
     "gemini-cli|path:~/.gemini,cmd:gemini"
-    "opencode|path:~/.opencode,cmd:opencode"
-    "openclaw|path:~/.openclaw"
+    "opencode|path:~/.config/opencode,path:~/.opencode,cmd:opencode"
+    "openclaw|path:~/.openclaw,cmd:openclaw"
     "qwen-code|path:~/.qwen,cmd:qwen"
     "iflow-cli|path:~/.iflow,cmd:iflow"
-    "windsurf|path:~/.windsurf,cmd:windsurf"
+    "windsurf|path:~/.codeium/windsurf,path:~/.windsurf,cmd:windsurf"
     "warp|path:~/.warp,path:~/Library/Application Support/dev.warp.Warp-Stable"
-    "amp|cmd:amp"
-    "crush|cmd:crush"
-    "goose|cmd:goose"
+    "amp|path:~/.config/amp,cmd:amp"
+    "crush|path:~/.config/crush,cmd:crush"
+    "goose|path:~/.config/goose,cmd:goose"
     "droid|cmd:droid"
     "kode|cmd:kode"
     "kilo|cmd:kilo"
     "kimi-cli|path:~/.kimi,cmd:kimi"
     "kiro-cli|path:~/.kiro,cmd:kiro"
+)
+
+# Agent ids that are MCP-only (no skill install path). These get passed to
+# `--auth-login --only` but NEVER to `npx skills add -a`.
+MCP_ONLY_AGENTS=(claude-desktop)
+
+# Agent ids whose MCP registration the installer can drive automatically.
+# Skipped agents (goose / kode / kilo) still get the skill, but the user
+# must register MCP manually for them. Keep this in sync with
+# AGENT_REGISTRY in AgentKey-Server/cli/src/lib/mcp-clients.ts.
+MCP_AUTO_AGENTS=(
+    claude-code claude-desktop cursor codex gemini-cli opencode
+    qwen-code iflow-cli kimi-cli kiro-cli windsurf warp
+    amp crush droid openclaw
 )
 
 # ── Colors (only if stdout is a TTY) ─────────────────────────────────────
@@ -157,6 +181,35 @@ detect_agents() {
     done
     if [ ${#hits[@]} -gt 0 ]; then
         printf '%s\n' "${hits[@]}" | sort -u | paste -sd, -
+    fi
+}
+
+# Membership helper: is "$1" in the rest of the argument list?
+_in_list() {
+    local needle="$1"; shift
+    local item
+    for item in "$@"; do
+        [ "$item" = "$needle" ] && return 0
+    done
+    return 1
+}
+
+# Filter a comma-separated id list, keeping only ids that are passed in the
+# remaining arguments. Output is comma-separated. Short-circuits on empty
+# input so callers don't have to guard.
+_filter_csv() {
+    local csv="$1"; shift
+    [ -z "$csv" ] && return 0
+    local id
+    local -a ids=() out=()
+    IFS=',' read -ra ids <<<"$csv"
+    for id in "${ids[@]}"; do
+        if _in_list "$id" "$@"; then
+            out+=("$id")
+        fi
+    done
+    if [ ${#out[@]} -gt 0 ]; then
+        printf '%s\n' "${out[@]}" | paste -sd, -
     fi
 }
 
@@ -339,42 +392,73 @@ main() {
 
     command -v npx >/dev/null 2>&1 || die "npx not found after Node install — please reinstall Node.js"
 
+    # ── Resolve target agent list ─────────────────────────────────────────
+    # Used by step 2 (skill) and step 3 (MCP). Computed once here so both
+    # halves see the same source of truth — that's the invariant the unified
+    # install+register design depends on. Two derived lists:
+    #
+    #   ALL_TARGETS  — every detected agent, including MCP-only ones (claude-desktop)
+    #   SKILL_TARGETS — ALL_TARGETS minus MCP-only ids (those would error in `skills add`)
+    #   MCP_TARGETS  — ALL_TARGETS filtered to ids the MCP CLI knows how to write
+    local ALL_TARGETS=""
+    if [ -n "$ONLY_AGENTS" ]; then
+        ALL_TARGETS="$ONLY_AGENTS"
+        ui_info "Targeting agents from --only: $ALL_TARGETS"
+    elif $ALL_AGENTS; then
+        ui_info "Installing for every agent the 'skills' CLI detects (--all-agents)"
+    else
+        ALL_TARGETS="$(detect_agents)"
+        if [ -n "$ALL_TARGETS" ]; then
+            ui_ok "Detected agents on this host: $ALL_TARGETS"
+            ui_muted "(override with --only <ids>, or use --all-agents)"
+        else
+            ui_info "No agents auto-detected — letting 'skills' CLI scan."
+        fi
+    fi
+
+    local SKILL_TARGETS=""
+    local MCP_TARGETS=""
+    if [ -n "$ALL_TARGETS" ]; then
+        # SKILL_TARGETS: drop MCP-only ids (would fail in `skills add -a`).
+        local _id
+        local -a _id_list=() _kept=()
+        IFS=',' read -ra _id_list <<<"$ALL_TARGETS"
+        for _id in "${_id_list[@]}"; do
+            if ! _in_list "$_id" "${MCP_ONLY_AGENTS[@]}"; then
+                _kept+=("$_id")
+            fi
+        done
+        if [ ${#_kept[@]} -gt 0 ]; then
+            SKILL_TARGETS="$(printf '%s\n' "${_kept[@]}" | paste -sd, -)"
+        fi
+        # MCP_TARGETS: keep only ids the MCP CLI knows how to register.
+        MCP_TARGETS="$(_filter_csv "$ALL_TARGETS" "${MCP_AUTO_AGENTS[@]}")"
+    fi
+
     # ── 2. Install the AgentKey skill ─────────────────────────────────────
-    if ! $SKIP_SKILL; then
+    if $SKIP_SKILL; then
+        ui_step "2. Install the AgentKey skill"
+        ui_muted "Skipped (--skip-skill)"
+    elif [ -n "$ALL_TARGETS" ] && [ -z "$SKILL_TARGETS" ]; then
+        # User explicitly selected only MCP-only ids (e.g. `--only claude-desktop`).
+        # There's nothing for `skills add` to do — skip the step entirely
+        # rather than fall through to "install for every detected agent."
+        ui_step "2. Install the AgentKey skill"
+        ui_muted "Skipped — selected targets ($ALL_TARGETS) are MCP-only (no skill install path)."
+    else
         ui_step "2. Install the AgentKey skill"
 
-        # Resolve target agent list:
-        #   1. --only wins (manual override)
-        #   2. else --all-agents ⇒ no -a (let skills CLI auto-detect everything)
-        #   3. else our auto-detection ⇒ -a <detected list>
-        #   4. else (nothing detected) ⇒ no -a (fall back to skills CLI default)
-        local TARGETS=""
-        if [ -n "$ONLY_AGENTS" ]; then
-            TARGETS="$ONLY_AGENTS"
-            ui_info "Targeting agents from --only: $TARGETS"
-        elif $ALL_AGENTS; then
-            ui_info "Installing for every agent the 'skills' CLI detects (--all-agents)"
-        else
-            TARGETS="$(detect_agents)"
-            if [ -n "$TARGETS" ]; then
-                ui_ok "Detected agents on this host: $TARGETS"
-                ui_muted "(override with --only <ids>, or use --all-agents)"
-            else
-                ui_info "No agents auto-detected — letting 'skills' CLI scan."
-            fi
-        fi
-
         local SKILLS_ARGS=(-y skills add "$SKILL_REPO" -g)
-        if [ -n "$TARGETS" ]; then
+        if [ -n "$SKILL_TARGETS" ]; then
             # `skills` CLI accepts -a as either repeated or comma-separated.
             # We pass each ID individually for maximum compatibility.
             local AGENT_LIST=()
-            IFS=',' read -ra AGENT_LIST <<<"$TARGETS"
+            IFS=',' read -ra AGENT_LIST <<<"$SKILL_TARGETS"
             SKILLS_ARGS+=(-a "${AGENT_LIST[@]}")
         fi
         # Always pass -y in noninteractive mode AND when we already resolved
         # an explicit target list — there's nothing left to ask the user.
-        if [ "$MODE" = noninteractive ] || [ -n "$TARGETS" ]; then
+        if [ "$MODE" = noninteractive ] || [ -n "$ALL_TARGETS" ]; then
             SKILLS_ARGS+=(-y)
         fi
 
@@ -404,16 +488,19 @@ main() {
             "$HOME/.qwen/skills/agentkey" \
             "$HOME/.iflow/skills/agentkey" \
             "$HOME/.windsurf/skills/agentkey" \
-            "$HOME/.warp/skills/agentkey"; do
+            "$HOME/.warp/skills/agentkey" \
+            "$HOME/.config/amp/skills/agentkey" \
+            "$HOME/.config/crush/skills/agentkey" \
+            "$HOME/.config/goose/skills/agentkey" \
+            "$HOME/.config/opencode/skills/agentkey" \
+            "$HOME/.kimi/skills/agentkey" \
+            "$HOME/.kiro/skills/agentkey"; do
             [ -f "$_dir/SKILL.md" ] && { _agentkey_found=true; break; }
         done
         if ! $_agentkey_found; then
             die "Skill install reported success but no agentkey SKILL.md was created — likely a network or git clone failure. Retry: npx -y skills add $SKILL_REPO -g -y"
         fi
         ui_ok "Skill installed"
-    else
-        ui_step "2. Install the AgentKey skill"
-        ui_muted "Skipped (--skip-skill)"
     fi
 
     # ── 3. MCP authentication ────────────────────────────────────────────
@@ -424,10 +511,31 @@ main() {
     if $SKIP_MCP; then
         ui_step "3. Register the MCP server"
         ui_muted "Skipped (--skip-mcp)"
+    elif [ -n "$ALL_TARGETS" ] && [ -z "$MCP_TARGETS" ]; then
+        # User selected ONLY MCP-incompatible agents (goose / kode / kilo
+        # via --only). Running auth-login without --only would silently
+        # register MCP in every detected agent — overriding the user's
+        # explicit scope. Skip rather than over-register. See PR #41 B1.
+        ui_step "3. Register the MCP server"
+        ui_muted "Skipped — selected agents ($ALL_TARGETS) need manual MCP setup (see SKILL.md Fallback section)."
     else
+        # Pin MCP registration to the same agent list the skill step
+        # targeted. When MCP_TARGETS is empty (auto-detect found nothing),
+        # let `@agentkey/cli` do its own detection — same fallback we use
+        # for skill install. Older CLI versions silently ignore --only,
+        # so this is forward-compatible.
+        local AUTH_ARGS=(--auth-login)
+        if [ -n "$MCP_TARGETS" ]; then
+            AUTH_ARGS+=(--only "$MCP_TARGETS")
+        fi
+
         ui_step "3. Register the MCP server"
         ui_info "Opening your browser for AgentKey device authentication ..."
-        ui_muted "If a browser doesn't open (SSH / Docker / headless), the auth URL is also printed below — open it on any device to finish."
+        if [ -n "$MCP_TARGETS" ]; then
+            ui_muted "Will register MCP in: $MCP_TARGETS"
+        else
+            ui_muted "If a browser doesn't open (SSH / Docker / headless), the auth URL is also printed below — open it on any device to finish."
+        fi
         echo
 
         # Telemetry context for `install_completed`. Opt-out is honored at
@@ -446,14 +554,14 @@ main() {
             done
             export AGENTKEY_INSTALL_SOURCE="one_liner"
             export AGENTKEY_DETECTED_AGENTS="$(detect_agents)"
-            export AGENTKEY_SELECTED_AGENTS="${TARGETS:-}"
+            export AGENTKEY_SELECTED_AGENTS="${ALL_TARGETS:-}"
             export AGENTKEY_INSTALLER_FLAGS="$_flags"
             export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
         fi
 
-        if ! npx -y "$CLI_PACKAGE" --auth-login; then
+        if ! npx -y "$CLI_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
-            ui_muted "Retry manually:  npx -y $CLI_PACKAGE --auth-login"
+            ui_muted "Retry manually:  npx -y $CLI_PACKAGE ${AUTH_ARGS[*]}"
             exit 1
         fi
         ui_ok "MCP server registered"
