@@ -48,9 +48,9 @@ The script may print **two kinds of lines** (in any order):
 - **Telemetry line** (zero or one):
   - `TELEMETRY <event> <key=value> ...` → forward via MCP, silently and best-effort:
     ```
-    execute_tool(name="agentkey_internal", params={
+    agentkey_internal({
       path: "telemetry/event",
-      params: { event: "<event>", props: { /* parsed key=value pairs */ } }
+      params: { event: "<event>", properties: { /* parsed key=value pairs */ } }
     })
     ```
   - If the tool does not exist or fails, **ignore completely** — never surface a telemetry error to the user.
@@ -86,9 +86,9 @@ If a Bash tool is available (Claude Code etc.), use `AskUserQuestion`. Otherwise
 
     After running **Step C**, dispatch (silently, ignore failures):
     ```
-    execute_tool(name="agentkey_internal", params={
+    agentkey_internal({
       path: "telemetry/event",
-      params: { event: "upgrade_decision", props: {
+      params: { event: "upgrade_decision", properties: {
         from_version: "<old>", to_version: "<new>", choice: "accept_once"
       }}
     })
@@ -99,9 +99,9 @@ If a Bash tool is available (Claude Code etc.), use `AskUserQuestion`. Otherwise
 
     After the action, dispatch (silently, ignore failures):
     ```
-    execute_tool(name="agentkey_internal", params={
+    agentkey_internal({
       path: "telemetry/event",
-      params: { event: "upgrade_decision", props: {
+      params: { event: "upgrade_decision", properties: {
         from_version: "<old>", to_version: "<new>", choice: "accept_always"
       }}
     })
@@ -127,9 +127,9 @@ If a Bash tool is available (Claude Code etc.), use `AskUserQuestion`. Otherwise
 
     Map the choice for telemetry: With-Bash uses `SNOOZED_LEVEL` (`1` → `snooze_1d`, `2` → `snooze_2d`, `3` → `snooze_7d`); No-Bash uses `snooze_1d` (no persisted level). Then dispatch (silently, ignore failures):
     ```
-    execute_tool(name="agentkey_internal", params={
+    agentkey_internal({
       path: "telemetry/event",
-      params: { event: "upgrade_decision", props: {
+      params: { event: "upgrade_decision", properties: {
         from_version: "<old>", to_version: "<new>", choice: "<mapped choice>"
       }}
     })
@@ -140,9 +140,9 @@ If a Bash tool is available (Claude Code etc.), use `AskUserQuestion`. Otherwise
 
     After the action, dispatch (silently, ignore failures):
     ```
-    execute_tool(name="agentkey_internal", params={
+    agentkey_internal({
       path: "telemetry/event",
-      params: { event: "upgrade_decision", props: {
+      params: { event: "upgrade_decision", properties: {
         from_version: "<old>", to_version: "<new>", choice: "never_ask"
       }}
     })
@@ -166,9 +166,9 @@ On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show t
 
 After the `npx` command returns, dispatch (silently, ignore failures):
 ```
-execute_tool(name="agentkey_internal", params={
+agentkey_internal({
   path: "telemetry/event",
-  params: { event: "upgrade_result", props: {
+  params: { event: "upgrade_result", properties: {
     from_version: "<old>", to_version: "<new>",
     status: <"ok" if npx succeeded else "fail">,
     error_class: <one of "network" | "npx_failed" | "permission" | "unknown" if status=="fail" else null>
