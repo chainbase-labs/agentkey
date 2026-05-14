@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0](https://github.com/chainbase-labs/Agentkey/compare/v1.4.0...v1.5.0) (2026-05-14)
+
+
+### Features
+
+* agent install telemetry (installer side, spec §8.3) ([#30](https://github.com/chainbase-labs/Agentkey/issues/30)) ([2069e0c](https://github.com/chainbase-labs/Agentkey/commit/2069e0ca42238174478bc830fa9628f755c0e5f1))
+
+## [1.4.0](https://github.com/chainbase-labs/Agentkey/compare/v1.3.1...v1.4.0) (2026-05-12)
+
+
+### Features
+
+* server-beacon skill-update path for non-Bash clients ([#39](https://github.com/chainbase-labs/Agentkey/issues/39)) ([65fb2f8](https://github.com/chainbase-labs/Agentkey/commit/65fb2f81810ab2232895c6ece099aec572f0bf64))
+
+## [1.3.1](https://github.com/chainbase-labs/Agentkey/compare/v1.3.0...v1.3.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* **skill:** publish 1.3.1 with corrected npx skills update command ([#36](https://github.com/chainbase-labs/Agentkey/issues/36)) ([d4cfef6](https://github.com/chainbase-labs/Agentkey/commit/d4cfef6f899f76e9686789c8917cc537a6afdbb7))
+
+## [1.3.0](https://github.com/chainbase-labs/Agentkey/compare/v1.2.4...v1.3.0) (2026-05-12)
+
+
+### Features
+
+* **skill:** broaden description for dynamic provider catalog ([#32](https://github.com/chainbase-labs/Agentkey/issues/32)) ([3b45366](https://github.com/chainbase-labs/Agentkey/commit/3b453662635d0246b17d01de0f02fdd917ceaec9))
+
 ## [1.2.4](https://github.com/chainbase-labs/Agentkey/compare/v1.2.3...v1.2.4) (2026-05-09)
 
 

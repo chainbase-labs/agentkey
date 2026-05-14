@@ -76,14 +76,19 @@ step "1. Skill files"
 if $SKIP_SKILL_REMOVE; then
     skipped "Skipped (--skip-skill-remove)"
 elif ! command -v npx >/dev/null 2>&1; then
-    warn "npx not found — skipping 'skills remove' (manual: npx skills remove chainbase-labs/agentkey -g)"
+    warn "npx not found — skipping 'skills remove' (manual: npx skills remove agentkey -g)"
 else
-    info "Running: npx -y skills remove chainbase-labs/agentkey -g -y"
-    if npx -y skills remove chainbase-labs/agentkey -g -y 2>/dev/null; then
+    # `skills remove` takes the **skill name** (`agentkey`), not the repo path.
+    # The CLI also exits 0 when nothing matches, so we inspect stdout instead.
+    info "Running: npx -y skills remove agentkey -g -y"
+    REMOVE_OUTPUT="$(npx -y skills remove agentkey -g -y 2>&1 || true)"
+    if printf '%s\n' "$REMOVE_OUTPUT" | grep -q "Successfully removed"; then
         ok "Skill removed from detected agents"
+    elif printf '%s\n' "$REMOVE_OUTPUT" | grep -q "No matching skills found"; then
+        skipped "Not registered with 'skills' CLI (already removed or installed via plugin marketplace)"
     else
-        warn "'skills remove' exited non-zero — some agents may still have skill files"
-        warn "Check manually:  npx skills list"
+        warn "'skills remove' produced unexpected output — some agents may still have skill files"
+        warn "Check manually:  npx skills list -g"
     fi
 fi
 

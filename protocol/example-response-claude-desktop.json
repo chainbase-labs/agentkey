@@ -1,0 +1,7 @@
+{
+  "protocol_version": 1,
+  "skill_version_latest": "1.3.0",
+  "client_detected": "claude",
+  "update_doc_url": "https://github.com/chainbase-labs/agentkey/releases/latest",
+  "release_notes_url": "https://github.com/chainbase-labs/agentkey/releases/tag/v1.3.0"
+}

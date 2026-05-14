@@ -1,6 +1,6 @@
 {
   "name": "agentkey",
-  "version": "1.2.4",
+  "version": "1.5.0",
   "description": "AgentKey — unified API for real-time external data: web search, social media (Twitter, Reddit, 小红书, Instagram, 知乎, TikTok, 抖音, B站, 微博, Threads, YouTube, LinkedIn), crypto/blockchain data, and web scraping",
   "author": {
     "name": "Chainbase Labs",
