@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1](https://github.com/chainbase-labs/Agentkey/compare/v1.6.0...v1.6.1) (2026-05-14)
+
+
+### Bug Fixes
+
+* **skill:** re-trigger release-please after [#44](https://github.com/chainbase-labs/Agentkey/issues/44) parse error ([#45](https://github.com/chainbase-labs/Agentkey/issues/45)) ([3caa5c3](https://github.com/chainbase-labs/Agentkey/commit/3caa5c3786dabd1cbffb0f9c48fb3e14cfd53598))
+
 ## [1.6.0](https://github.com/chainbase-labs/Agentkey/compare/v1.5.0...v1.6.0) (2026-05-14)
 
 
