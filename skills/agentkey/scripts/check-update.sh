@@ -90,18 +90,20 @@ emit_telemetry() {
     printf '\n'
 }
 
+# Sanity check the embedded version first — if release-please ever fails to
+# sync this line, exit silently rather than emit garbage. Runs before any
+# emit_telemetry call so a malformed LOCAL_VERSION can't poison the heartbeat
+# file path ($TMPDIR/agentkey-heartbeat-$LOCAL_VERSION).
+case "$LOCAL_VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) exit 0 ;;
+esac
+
 # Disabled by user ("Never ask again") — exit silently.
 if [ -f "$DISABLED_FILE" ]; then
     emit_telemetry skill_loaded update_state=disabled "$(auto_upgrade_flag)"
     exit 0
 fi
-
-# Sanity check the embedded version — if release-please ever fails to sync
-# this line, exit silently rather than emit garbage.
-case "$LOCAL_VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) exit 0 ;;
-esac
 
 # Cache `date +%s` once — used by both the cache age math and snooze expiry.
 NOW=$(date +%s)
