@@ -111,6 +111,9 @@ Options:
   --force-mcp         Re-run MCP auth even if AgentKey is already configured
   --skip-skill        Skip the skill install step (only run MCP auth)
   --skip-mcp          Skip the MCP auth step (only install the skill)
+  --no-telemetry      Disable anonymous usage telemetry (writes
+                      ~/.config/agentkey/telemetry-disabled so the skill
+                      stays opted-out across runs)
   -h, --help          Show this help
 
 Behavior:
@@ -237,6 +240,26 @@ install_node() {
     ui_ok "Node.js installed"
 }
 
+# Compute a stable per-device fingerprint for install_completed dedup.
+# spec §6.3: sha256(hostname+platform+username)[:16]. Falls back to a random
+# value if neither sha256sum nor shasum is available (extremely rare).
+compute_device_fingerprint() {
+    local platform="$1"
+    local hn user input hash
+    hn="$(hostname 2>/dev/null || echo "")"
+    user="${USER:-$(id -un 2>/dev/null || echo "")}"
+    input="$hn|$platform|$user"
+    if command -v sha256sum >/dev/null 2>&1; then
+        hash="$(printf '%s' "$input" | sha256sum | cut -c1-16)"
+    elif command -v shasum >/dev/null 2>&1; then
+        hash="$(printf '%s' "$input" | shasum -a 256 | cut -c1-16)"
+    else
+        # Last resort: use $RANDOM. Won't dedup across runs but won't crash.
+        hash="rnd$(printf '%04x%04x%04x' "$RANDOM" "$RANDOM" "$RANDOM")"
+    fi
+    printf '%s' "$hash"
+}
+
 # ──────────────────────────────────────────────────────────────────────────
 # main — wraps the entire procedural body so that under `curl | bash`
 # bash finishes reading the script before any fd-rebinding happens.
@@ -256,6 +279,11 @@ main() {
     # `set -u` happy.
     FORCE_REMOTE=false
     FORCE_LOCAL=false
+    local NO_TELEMETRY=false
+
+    # Snapshot original args before the parse loop shifts them away — needed
+    # later for AGENTKEY_INSTALLER_FLAGS env passthrough.
+    local _orig_args=("$@")
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -270,6 +298,7 @@ main() {
             --force-mcp)       FORCE_MCP=true; shift ;;
             --skip-skill)      SKIP_SKILL=true; shift ;;
             --skip-mcp)        SKIP_MCP=true; shift ;;
+            --no-telemetry)    NO_TELEMETRY=true; shift ;;
             -h|--help)         PRINT_HELP=true; shift ;;
             *)                 ui_warn "Unknown argument: $1"; shift ;;
         esac
@@ -331,6 +360,19 @@ main() {
         die "--interactive requested but no TTY is reachable"
     fi
     ui_ok "Mode: $MODE"
+
+    # Resolve telemetry intent: --no-telemetry overrides everything; existing
+    # ~/.config/agentkey/telemetry-disabled file means already-opted-out.
+    local TELEMETRY_OPT_OUT_FILE="$HOME/.config/agentkey/telemetry-disabled"
+    if $NO_TELEMETRY; then
+        mkdir -p "$(dirname "$TELEMETRY_OPT_OUT_FILE")" 2>/dev/null || true
+        touch "$TELEMETRY_OPT_OUT_FILE" 2>/dev/null || true
+        ui_ok "Telemetry: disabled (--no-telemetry)"
+    elif [ -f "$TELEMETRY_OPT_OUT_FILE" ]; then
+        ui_ok "Telemetry: disabled (~/.config/agentkey/telemetry-disabled exists)"
+    else
+        ui_info "Telemetry: anonymous usage stats enabled (re-run with --no-telemetry to opt out)"
+    fi
 
     # Node check
     local NODE_OK=false NODE_VERSION NODE_MAJOR
@@ -470,6 +512,27 @@ main() {
             ui_muted "When auth finishes, the MCP server is written into Claude Code / Claude Desktop / Cursor configs."
         fi
         echo
+
+        # Telemetry context for `install_completed`. Opt-out is honored at
+        # the SOURCE: when AGENTKEY_TELEMETRY=0, no other context env vars
+        # are exported — hostname-derived fingerprint, agent lists, and
+        # installer flags are never computed nor passed to the child
+        # `npx @agentkey/mcp` process. The server treats AGENTKEY_TELEMETRY=0
+        # as a hard skip.
+        if $NO_TELEMETRY || [ -f "$TELEMETRY_OPT_OUT_FILE" ]; then
+            export AGENTKEY_TELEMETRY=0
+        else
+            export AGENTKEY_TELEMETRY=1
+            local _flags=""
+            for _f in "${_orig_args[@]:-}"; do
+                _flags="${_flags:+$_flags,}$_f"
+            done
+            export AGENTKEY_INSTALL_SOURCE="one_liner"
+            export AGENTKEY_DETECTED_AGENTS="$(detect_agents)"
+            export AGENTKEY_SELECTED_AGENTS="${TARGETS:-}"
+            export AGENTKEY_INSTALLER_FLAGS="$_flags"
+            export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
+        fi
 
         if ! npx -y "$MCP_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
