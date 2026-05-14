@@ -22,6 +22,8 @@
 #   3. Writers sandbox   — call every AGENT_REGISTRY writer; assert schemas
 #   4. Uninstaller sandbox — scrub fakes; assert decoys preserved
 
+# Keep `-e` off so one failing assertion does not stop the smoke run before the
+# remaining phases report their own failures.
 set -uo pipefail
 
 # ── Locate repos ──────────────────────────────────────────────────────────
@@ -33,14 +35,13 @@ SKILL_REPO="$(dirname "$SCRIPT_DIR")"
 #   1. $AGENTKEY_CLI_SRC env var (manual override)
 #   2. Direct sibling of skill repo (main worktree case)
 #   3. Climb up from a git worktree (3 levels up from .claude/worktrees/<name>)
-#   4. Fall back to the env var as-is so the error message points at it
+#   4. Fall back to a generic sibling path so the error message is actionable
 _find_cli_src() {
     local cand
     for cand in \
         "${AGENTKEY_CLI_SRC:-}" \
         "$SKILL_REPO/../AgentKey-Server/cli" \
-        "$SKILL_REPO/../../../../AgentKey-Server/cli" \
-        "$HOME/Documents/Codebase/AgentKey-Server/cli"
+        "$SKILL_REPO/../../../../AgentKey-Server/cli"
     do
         [ -z "$cand" ] && continue
         if [ -d "$cand" ] && [ -f "$cand/package.json" ]; then
@@ -226,8 +227,14 @@ phase_3() {
     # need real `droid` / `openclaw` binaries on PATH).
     info "running writers for every JSON / TOML agent..."
     local runner="$SANDBOX/runner.mjs"
-    cat > "$runner" <<EOF
-import { AGENT_REGISTRY, writeAgentConfig } from "$CLI_SRC/dist/lib/mcp-clients.js";
+    cat > "$runner" <<'EOF'
+import { pathToFileURL } from "node:url";
+
+const cliModule = process.env.AGENTKEY_CLI_MODULE;
+if (!cliModule) {
+  throw new Error("AGENTKEY_CLI_MODULE is required");
+}
+const { AGENT_REGISTRY, writeAgentConfig } = await import(pathToFileURL(cliModule).href);
 
 const SKIP_IDS = new Set(["claude-code", "droid", "openclaw"]);
 const ctx = { apiKey: "ak_test_smoke", baseUrl: "https://api.agentkey.app" };
@@ -243,7 +250,7 @@ console.log("---");
 console.log("written=" + written + " failed=" + failed);
 EOF
     local writer_out
-    writer_out="$(HOME="$SANDBOX" node "$runner" 2>&1)"
+    writer_out="$(AGENTKEY_CLI_MODULE="$CLI_SRC/dist/lib/mcp-clients.js" HOME="$SANDBOX" node "$runner" 2>&1)"
     if printf '%s' "$writer_out" | grep -q '^ERR '; then
         fail "some writers reported errors:"
         printf '%s\n' "$writer_out" | grep '^ERR '
@@ -293,7 +300,7 @@ EOF
 
     # Idempotency check — re-run all writers and make sure nothing duplicates.
     info "idempotency: re-running every writer..."
-    HOME="$SANDBOX" node "$runner" >/dev/null 2>&1
+    AGENTKEY_CLI_MODULE="$CLI_SRC/dist/lib/mcp-clients.js" HOME="$SANDBOX" node "$runner" >/dev/null 2>&1
     local agentkey_count
     agentkey_count="$(grep -c '\[mcp_servers\.agentkey\]' "$codex" 2>/dev/null)"
     if [ "$agentkey_count" = "1" ]; then
