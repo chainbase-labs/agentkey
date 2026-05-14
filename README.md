@@ -123,7 +123,7 @@ AgentKey maintains cloud-side integrations with each platform — no extra accou
 <details>
 <summary><b>Is it safe?</b></summary>
 
-Yes. AgentKey is a master key — one platform that unlocks external capabilities for your agent. By design, we have no access to your local files, your credentials, or your agent's conversations. There's nothing for us to collect.
+Yes. AgentKey is a master key — one platform that unlocks external capabilities for your agent. By design, we have no access to your local files, your credentials, or your agent's conversations. The only data AgentKey collects is anonymous usage telemetry — which agent you installed into, your skill version, and upgrade outcomes — never your queries or responses. See "How do I opt out of telemetry?" below.
 
 </details>
 
@@ -222,6 +222,26 @@ npx skills remove chainbase-labs/agentkey
 ```
 
 The one-command uninstaller additionally cleans npm/npx caches, legacy shell rc entries, CLAUDE.md sections, and MCP stdio logs — use that if you want a fully clean slate.
+
+</details>
+
+<details>
+<summary><b>How do I opt out of telemetry?</b></summary>
+
+AgentKey sends anonymous usage telemetry (which agent you use, skill version, upgrade outcomes — never queries or responses). Three ways to opt out, any of them works:
+
+```bash
+# Persistent opt-out (recommended)
+touch ~/.config/agentkey/telemetry-disabled
+
+# One-shot env override (CI / single session)
+AGENTKEY_TELEMETRY=0 <your command>
+
+# At install time
+curl -fsSL https://agentkey.app/install.sh | bash -s -- --no-telemetry
+```
+
+To re-enable, delete `~/.config/agentkey/telemetry-disabled`.
 
 </details>
 

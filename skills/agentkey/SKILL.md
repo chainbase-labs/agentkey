@@ -40,8 +40,21 @@ The response is structured JSON conforming to [protocol/skill-meta-v1](https://g
 bash "${CLAUDE_PLUGIN_ROOT:-$HOME/.claude}/skills/agentkey/scripts/check-update.sh" 2>/dev/null
 ```
 
-- `UP_TO_DATE` or empty → continue silently to 0.C.
-- `UPGRADE_AVAILABLE <old> <new>` → if 0.A already prompted the user this session, skip; else run the legacy **Upgrade flow** below with the new version, then continue to 0.C.
+The script may print **two kinds of lines** (in any order):
+
+- **Update line** (one of):
+  - `UP_TO_DATE` or empty → continue silently to 0.C.
+  - `UPGRADE_AVAILABLE <old> <new>` → if 0.A already prompted the user this session, skip; else run the legacy **Upgrade flow** below with the new version, then continue to 0.C.
+- **Telemetry line** (zero or one):
+  - `TELEMETRY <event> <key=value> ...` → forward via MCP, silently and best-effort:
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "<event>", props: { /* parsed key=value pairs */ } }
+    })
+    ```
+  - If the tool does not exist or fails, **ignore completely** — never surface a telemetry error to the user.
+  - Do not let the telemetry dispatch block 0.C.
 
 If your client has no Bash tool (Claude Desktop, some web-based clients), this step is a no-op — that's fine, 0.A already covered it.
 
@@ -70,9 +83,29 @@ If a Bash tool is available (Claude Code etc.), use `AskUserQuestion`. Otherwise
 - Question: `AgentKey v<new> is available (currently on v<old>). Upgrade now?`
 - Options:
   - **`Yes, upgrade now`** → run **Step C**.
+
+    After running **Step C**, dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "accept_once"
+      }}
+    })
+    ```
   - **`Always keep me up to date`** →
     - **With Bash:** run `mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/auto-upgrade"`. Tell the user "Auto-upgrade enabled — future AgentKey updates install automatically. Remove `~/.config/agentkey/auto-upgrade` to undo." Then run **Step C**.
     - **No Bash:** tell the user verbatim: "Your current client can't run shell commands, so I can't enable auto-upgrade for you. To turn it on, run this in your terminal once: `mkdir -p ~/.config/agentkey && touch ~/.config/agentkey/auto-upgrade`. For now I'll proceed with this one-time upgrade." Then run **Step C**.
+
+    After the action, dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "accept_always"
+      }}
+    })
+    ```
   - **`Not now`** →
     - **With Bash:** run the snooze script:
       ```bash
@@ -91,9 +124,29 @@ If a Bash tool is available (Claude Code etc.), use `AskUserQuestion`. Otherwise
       ```
       Translate the level into a duration for the user — `SNOOZED_LEVEL=1` → "Next reminder in 24h", `2` → "in 48h", `3` → "in 1 week". Continue to step 0.C — **do not** upgrade.
     - **No Bash:** tell the user verbatim: "Skipping for now. Your current client can't persist a snooze, so you may be re-prompted next session. To silence prompts for longer, run in a terminal once: `mkdir -p ~/.config/agentkey && touch ~/.config/agentkey/update-disabled` (permanently off — delete that file to re-enable)." Continue to step 0.C — **do not** upgrade.
+
+    Map the choice for telemetry: With-Bash uses `SNOOZED_LEVEL` (`1` → `snooze_1d`, `2` → `snooze_2d`, `3` → `snooze_7d`); No-Bash uses `snooze_1d` (no persisted level). Then dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "<mapped choice>"
+      }}
+    })
+    ```
   - **`Never ask again`** →
     - **With Bash:** run `mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey" && touch "${XDG_CONFIG_HOME:-$HOME/.config}/agentkey/update-disabled"`. Tell the user "Update checks disabled. Remove `~/.config/agentkey/update-disabled` to re-enable." Continue to step 0.C — **do not** upgrade.
     - **No Bash:** tell the user verbatim: "Your current client can't run shell commands, so I can't persist this. To disable update checks permanently, run in a terminal once: `mkdir -p ~/.config/agentkey && touch ~/.config/agentkey/update-disabled`. I'll skip this prompt for the rest of this session." Continue to step 0.C — **do not** upgrade.
+
+    After the action, dispatch (silently, ignore failures):
+    ```
+    execute_tool(name="agentkey_internal", params={
+      path: "telemetry/event",
+      params: { event: "upgrade_decision", props: {
+        from_version: "<old>", to_version: "<new>", choice: "never_ask"
+      }}
+    })
+    ```
 
 **Step C — Run the upgrade.**
 
@@ -110,6 +163,25 @@ Branch by trigger:
 npx skills update agentkey
 ```
 On success: tell the user "✓ AgentKey updated to v\<new\>." On failure: show the failure verbatim and tell the user "Run `npx skills update agentkey` manually to retry. If that doesn't work for your client, download from https://github.com/chainbase-labs/agentkey/releases/latest instead." Either way, continue to step 0.C.
+
+After the `npx` command returns, dispatch (silently, ignore failures):
+```
+execute_tool(name="agentkey_internal", params={
+  path: "telemetry/event",
+  params: { event: "upgrade_result", props: {
+    from_version: "<old>", to_version: "<new>",
+    status: <"ok" if npx succeeded else "fail">,
+    error_class: <one of "network" | "npx_failed" | "permission" | "unknown" if status=="fail" else null>
+  }}
+})
+```
+
+Decision rules for `error_class`:
+- npx exit code 0 → `status: "ok"`, `error_class: null`
+- npx output contains `ENOTFOUND` / `ETIMEDOUT` / `ECONNREFUSED` → `network`
+- npx output contains `EACCES` / `permission denied` → `permission`
+- npx ran but reported its own failure → `npx_failed`
+- otherwise → `unknown`
 
 Then route by intent:
 - "setup"/"install"/"api key"/"reinstall" → **Setup**
