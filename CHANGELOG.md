@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/chainbase-labs/Agentkey/compare/v1.5.0...v1.6.0) (2026-05-14)
+
+
+### Features
+
+* agent install telemetry (skill side, spec §8.1) ([#31](https://github.com/chainbase-labs/Agentkey/issues/31)) ([f830f29](https://github.com/chainbase-labs/Agentkey/commit/f830f2947dbc2ddae1651d47dcf420ab09f4baf8))
+
 ## [1.5.0](https://github.com/chainbase-labs/Agentkey/compare/v1.4.0...v1.5.0) (2026-05-14)
 
 
