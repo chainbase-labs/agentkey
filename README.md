@@ -146,7 +146,7 @@ Just top up. No auto-renewal, no hidden charges.
 
 There are two pieces and they update differently:
 
-- **MCP server** (`@agentkey/mcp` npm package): always up to date. Your MCP config runs it as `npx -y @agentkey/mcp`, which re-resolves to the latest published version every time your agent restarts. You never have to touch this.
+- **MCP server**: the real server is hosted at `https://api.agentkey.app/v1/mcp`, so it's always up to date — no local upgrade step. The `@agentkey/cli` package (run as `npx -y @agentkey/cli --auth-login`) only writes the remote-HTTP MCP config into each AI client and never has to be re-run unless you want to rotate your key.
 
 - **Skill files** (`SKILL.md` + helpers): how this updates depends on your client.
 
@@ -187,7 +187,7 @@ npx skills add chainbase-labs/agentkey@v1.0.0
 
 Note: `npx skills update` writes to `~/.agents/skills/agentkey` and `~/.claude/skills/agentkey`, which is where Claude Code reads from. **Claude Desktop reads from its own sandbox path** and is not touched by `npx skills update` — use the Desktop bootstrap command above for Desktop.
 
-Re-run `npx -y @agentkey/mcp --auth-login` only when you want to rotate your API key.
+Re-run `npx -y @agentkey/cli --auth-login` only when you want to rotate your API key.
 
 </details>
 
@@ -299,7 +299,7 @@ PowerShell equivalents: `-Yes`, `-ListAgents`, `-Only`, `-AllAgents`, `-SkipMcp`
 npx skills add chainbase-labs/agentkey
 
 # 2. Authenticate and register the MCP server
-npx -y @agentkey/mcp --auth-login
+npx -y @agentkey/cli --auth-login
 ```
 
 </details>
@@ -327,7 +327,7 @@ curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
 
 PowerShell: `-Remote` / `-Local`.
 
-If you'd rather skip the URL/QR flow entirely and type a key manually, `npx -y @agentkey/mcp --setup` opens an interactive wizard that asks for the key and lets you pick which MCP clients to write to.
+If you'd rather skip the URL/QR flow entirely and type a key manually, `npx -y @agentkey/cli --setup` opens an interactive wizard that asks for the key and lets you pick which MCP clients to write to.
 
 </details>
 
@@ -340,9 +340,9 @@ MCP auto-configuration covers **Claude Code**, **Claude Desktop**, and **Cursor*
 {
   "mcpServers": {
     "agentkey": {
-      "command": "npx",
-      "args": ["-y", "@agentkey/mcp"],
-      "env": { "AGENTKEY_API_KEY": "ak_..." }
+      "type": "http",
+      "url": "https://api.agentkey.app/v1/mcp",
+      "headers": { "Authorization": "Bearer ak_..." }
     }
   }
 }
@@ -365,12 +365,12 @@ cd agentkey
 npx skills add .
 
 # 2. Register the MCP server (if you haven't already)
-npx -y @agentkey/mcp --auth-login
+npx -y @agentkey/cli --auth-login
 ```
 
 `npx skills add .` accepts a local path (or a `file://` URL) — run it again after each edit to `skills/agentkey/SKILL.md`. The MCP step only needs to run once per machine.
 
-**Iterating on the MCP server itself?** Point the MCP config's `command` at `node /path/to/AgentKey-Server/mcp-server/dist/index.js`, then `pnpm --filter @agentkey/mcp build` in the server repo between iterations.
+**Iterating on the MCP server itself?** The server lives at `AgentKey-Server/` (Go) and exposes the MCP endpoint at `/v1/mcp`. Run a local server (`make run`) and point your MCP config at `http://localhost:8081/v1/mcp` to test changes end-to-end.
 
 **Claude Code plugin mode** — add the repo as a local marketplace:
 

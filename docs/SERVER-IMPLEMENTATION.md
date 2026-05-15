@@ -1,6 +1,6 @@
 # Server Implementation Guide — `agentkey_skill_meta`
 
-Implementation handoff for the `@agentkey/mcp` MCP server. Tells the server maintainer exactly what to build so the cross-client skill-update path (Claude Desktop, Cursor, etc.) works.
+Implementation handoff for AgentKey-Server's hosted MCP endpoint (`/v1/mcp`). Tells the server maintainer exactly what to build so the cross-client skill-update path (Claude Desktop, Cursor, etc.) works.
 
 **Authoritative spec**: [protocol/skill-meta-v1.md](../protocol/skill-meta-v1.md). This doc is implementation guidance, not protocol; if it conflicts with the spec, the spec wins.
 
@@ -90,7 +90,7 @@ async function fetchFromGitHub(prevEtag?: string): Promise<Cache | null> {
     "https://api.github.com/repos/chainbase-labs/agentkey/releases/latest",
     {
       headers: {
-        "User-Agent": "@agentkey/mcp",
+        "User-Agent": "AgentKey-Server",
         ...(prevEtag ? { "If-None-Match": prevEtag } : {}),
       },
       signal: AbortSignal.timeout(3000),
@@ -230,7 +230,7 @@ export async function handleSkillMeta() {
 Add a CI workflow on the server side that diffs the vendored schema against this repo's authoritative copy:
 
 ```yaml
-# .github/workflows/protocol-drift.yml (in @agentkey/mcp repo)
+# .github/workflows/protocol-drift.yml (in AgentKey-Server repo)
 on:
   pull_request:
   schedule: [{cron: '0 12 * * 1'}]
@@ -285,9 +285,9 @@ Honor the env var `AGENTKEY_NO_VERSION_BEACON=1`: tool stays registered (so the 
 
 ## Release coordination with this repo
 
-1. Implement and merge in `@agentkey/mcp`
-2. `npm publish` a new version
-3. (Verify) Any user with `npx -y @agentkey/mcp` in their config will pick it up on next agent restart automatically
+1. Implement and merge in AgentKey-Server
+2. Deploy to production (hosted MCP endpoint at `https://api.agentkey.app/v1/mcp`)
+3. (Verify) Any user whose MCP config points at `/v1/mcp` picks it up on next agent restart automatically — no client-side upgrade required
 4. In this repo, a new skill release (`v1.4.0`) ships the SKILL.md rule that reads the metadata tool
 5. Existing skill versions (≤1.3.x) silently ignore the new tool — no regression; they continue to use the inline bash path on Claude Code and have no upgrade path on Desktop (status quo)
 6. New skill versions (≥1.4.0) work everywhere

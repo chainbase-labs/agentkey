@@ -18,7 +18,7 @@ set -euo pipefail
 
 # ── Constants ─────────────────────────────────────────────────────────────
 SKILL_REPO="chainbase-labs/agentkey"
-MCP_PACKAGE="@agentkey/mcp"
+CLI_PACKAGE="@agentkey/cli"
 NODE_MIN_MAJOR=18
 
 # ── Agent markers ─────────────────────────────────────────────────────────
@@ -517,7 +517,7 @@ main() {
         # the SOURCE: when AGENTKEY_TELEMETRY=0, no other context env vars
         # are exported — hostname-derived fingerprint, agent lists, and
         # installer flags are never computed nor passed to the child
-        # `npx @agentkey/mcp` process. The server treats AGENTKEY_TELEMETRY=0
+        # `npx @agentkey/cli` process. The server treats AGENTKEY_TELEMETRY=0
         # as a hard skip.
         if $NO_TELEMETRY || [ -f "$TELEMETRY_OPT_OUT_FILE" ]; then
             export AGENTKEY_TELEMETRY=0
@@ -534,9 +534,9 @@ main() {
             export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
         fi
 
-        if ! npx -y "$MCP_PACKAGE" "${AUTH_ARGS[@]}"; then
+        if ! npx -y "$CLI_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
-            ui_muted "Retry manually:  npx -y $MCP_PACKAGE ${AUTH_ARGS[*]}"
+            ui_muted "Retry manually:  npx -y $CLI_PACKAGE ${AUTH_ARGS[*]}"
             exit 1
         fi
         ui_ok "MCP server registered"

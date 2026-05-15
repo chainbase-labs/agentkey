@@ -260,13 +260,20 @@ Write-Step '6. npm / npx caches'
 
 if (Get-Command npm -ErrorAction SilentlyContinue) {
     $globalList = & npm list -g --depth=0 2>$null
-    if ($globalList -and ($globalList -match '@agentkey/mcp')) {
-        Write-Info 'Uninstalling global @agentkey/mcp ...'
-        & npm uninstall -g '@agentkey/mcp' 2>$null | Out-Null
-        if ($LASTEXITCODE -eq 0) { Write-Ok 'Removed @agentkey/mcp' }
-        else { Write-Warn2 'Could not remove @agentkey/mcp' }
-    } else {
-        Write-Skip 'Global @agentkey/mcp not installed'
+    $removedAny = $false
+    # Sweep both the current package name and the legacy v0.x name so users
+    # who installed before the @agentkey/mcp → @agentkey/cli rename get a
+    # clean uninstall.
+    foreach ($pkg in @('@agentkey/cli', '@agentkey/mcp')) {
+        if ($globalList -and ($globalList -match [regex]::Escape($pkg))) {
+            Write-Info "Uninstalling global $pkg ..."
+            & npm uninstall -g $pkg 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { Write-Ok "Removed $pkg"; $removedAny = $true }
+            else { Write-Warn2 "Could not remove $pkg" }
+        }
+    }
+    if (-not $removedAny) {
+        Write-Skip 'No global @agentkey/cli or @agentkey/mcp installed'
     }
 } else {
     Write-Skip 'npm not on PATH'

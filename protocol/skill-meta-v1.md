@@ -1,6 +1,6 @@
 # AgentKey Skill-Meta Protocol v1
 
-Contract between **`@agentkey/mcp`** (server, npm package) and **`chainbase-labs/agentkey`** (this skill repo). The server publishes the skill's latest version + client-specific upgrade instructions via a dedicated MCP tool; the skill (via the agent) reads it and tells the user how to upgrade.
+Contract between **AgentKey-Server** (the hosted MCP server at `/v1/mcp`) and **`chainbase-labs/agentkey`** (this skill repo). The server publishes the skill's latest version + client-specific upgrade instructions via a dedicated MCP tool; the skill (via the agent) reads it and tells the user how to upgrade.
 
 This protocol exists because some MCP clients — notably Claude Desktop — cannot execute the inline `bash` block in `SKILL.md` Step 0, so the in-skill update-check path silently fails there. Routing the check through the always-on MCP server makes upgrades discoverable on every client.
 
@@ -171,4 +171,4 @@ The server's own CI MUST validate every `SkillMetaResponse` it emits against thi
 - [example-response-claude-code.json](./example-response-claude-code.json) — fixture for Code client
 - [example-response-unknown-client.json](./example-response-unknown-client.json) — fixture for unrecognized client
 - [example-response-offline.json](./example-response-offline.json) — fixture for the server-offline / rate-limited failure mode
-- [docs/SERVER-IMPLEMENTATION.md](../docs/SERVER-IMPLEMENTATION.md) — implementation guide for `@agentkey/mcp` maintainers
+- [docs/SERVER-IMPLEMENTATION.md](../docs/SERVER-IMPLEMENTATION.md) — implementation guide for AgentKey-Server maintainers

@@ -293,15 +293,24 @@ $md_changed || skipped "No removable AgentKey section in CLAUDE.md"
 step "7. npm / npx caches"
 
 if command -v npm >/dev/null 2>&1; then
-    if npm list -g --depth=0 2>/dev/null | grep -q "@agentkey/mcp"; then
-        info "Uninstalling global @agentkey/mcp ..."
-        if npm uninstall -g @agentkey/mcp >/dev/null 2>&1; then
-            ok "Removed @agentkey/mcp"
-        else
-            warn "Could not remove @agentkey/mcp — try: npm uninstall -g @agentkey/mcp"
+    _global_list="$(npm list -g --depth=0 2>/dev/null || true)"
+    _removed_any=false
+    # Sweep both the current package name and the legacy v0.x name so
+    # users who installed before the @agentkey/mcp → @agentkey/cli rename
+    # get a clean uninstall.
+    for _pkg in "@agentkey/cli" "@agentkey/mcp"; do
+        if echo "$_global_list" | grep -q "$_pkg"; then
+            info "Uninstalling global $_pkg ..."
+            if npm uninstall -g "$_pkg" >/dev/null 2>&1; then
+                ok "Removed $_pkg"
+                _removed_any=true
+            else
+                warn "Could not remove $_pkg — try: npm uninstall -g $_pkg"
+            fi
         fi
-    else
-        skipped "Global @agentkey/mcp not installed"
+    done
+    if ! $_removed_any; then
+        skipped "No global @agentkey/cli or @agentkey/mcp installed"
     fi
 else
     skipped "npm not on PATH"
