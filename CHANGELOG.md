@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1](https://github.com/chainbase-labs/Agentkey/compare/v1.7.0...v1.7.1) (2026-05-15)
+
+
+### Bug Fixes
+
+* **install:** always run auth-login, drop stale already_authed check ([#50](https://github.com/chainbase-labs/Agentkey/issues/50)) ([658dfda](https://github.com/chainbase-labs/Agentkey/commit/658dfda00b0d53808bff816a6c43888d24c73e5f))
+
 ## [1.7.0](https://github.com/chainbase-labs/Agentkey/compare/v1.6.1...v1.7.0) (2026-05-15)
 
 
