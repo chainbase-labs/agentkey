@@ -142,9 +142,9 @@ If the user's agent is **Codex / OpenCode / Gemini CLI / Linux Claude Desktop / 
    {
      "mcpServers": {
        "agentkey": {
-         "command": "npx",
-         "args": ["-y", "@agentkey/mcp"],
-         "env": { "AGENTKEY_API_KEY": "ak_..." }
+         "type": "http",
+         "url": "https://api.agentkey.app/v1/mcp",
+         "headers": { "Authorization": "Bearer ak_..." }
        }
      }
    }

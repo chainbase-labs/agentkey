@@ -9,7 +9,7 @@ AgentKey Skill ships the agent-side half of AgentKey: a single skill that teache
 AgentKey has **two pieces** and a full end-user install is two commands:
 
 1. `npx skills add chainbase-labs/agentkey` — installs **this** skill. It does NOT register the MCP server.
-2. `npx -y @agentkey/cli --auth-login` — runs the AgentKey CLI (`@agentkey/cli`, published from `../AgentKey-Server/cli`), which registers the MCP server (`@agentkey/mcp` from `../AgentKey-Server/mcp-server`) and writes the API key into Claude Code, Claude Desktop, and Cursor configs.
+2. `npx -y @agentkey/cli --auth-login` — runs the AgentKey CLI (`@agentkey/cli`, published from `../AgentKey-Server/cli`). It mints an API key and writes an HTTP MCP entry (`type: http`, `url: https://api.agentkey.app/v1/mcp`, `Authorization: Bearer ak_...`) into the user's Claude Code, Claude Desktop, and Cursor configs. The MCP server itself is hosted at `api.agentkey.app` — nothing is installed on the user's machine to run it.
 
 The skill is useless without the MCP server; the MCP server works without the skill but the agent won't know to prefer it over built-in web search. Keep this mental model when editing docs — do not let either command drift into claiming it does both.
 

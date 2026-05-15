@@ -55,7 +55,7 @@ The skill ships two helper scripts that the agent invokes:
 | Destination | When | Why |
 |---|---|---|
 | `api.github.com` | At most every 24 hours | Look up the latest release tag |
-| npm registry | When the user first runs `npx -y @agentkey/mcp` | Resolve and run the MCP server |
+| `api.agentkey.app` | Each MCP tool call the agent makes | Hosted MCP server — receives the `Authorization` header and serves tool responses |
 
 ### Credential handling
 
@@ -66,7 +66,8 @@ The skill ships two helper scripts that the agent invokes:
 ### Supply chain
 
 - Releases are cut by [release-please](https://github.com/googleapis/release-please) from merged Conventional-Commit PRs on `main` — no manual artifact uploads, no manual tag pushes.
-- The companion npm packages `@agentkey/mcp` (MCP server) and `@agentkey/cli` (installer / auth) are published from the same organization. Users invoke them via `npx -y @agentkey/mcp` and `npx -y @agentkey/cli`, which resolve to the latest published version at runtime — this is the same threat model as any other `npx`-launched CLI.
+- The MCP server itself is hosted at `https://api.agentkey.app/v1/mcp`; it is not shipped to user machines. Users interact with it as an HTTP MCP endpoint authenticated by their personal `Authorization: Bearer <key>` header.
+- The companion npm package `@agentkey/cli` (installer / auth) is published from the same organization. Users invoke it via `npx -y @agentkey/cli`, which resolves to the latest published version at runtime — same threat model as any other `npx`-launched CLI.
 - Future work: SLSA provenance attestation via GitHub OIDC + sigstore; signed npm provenance.
 
 ## Scanner false-positive notes

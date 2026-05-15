@@ -146,7 +146,7 @@ Just top up. No auto-renewal, no hidden charges.
 
 There are two pieces and they update differently:
 
-- **MCP server** (`@agentkey/mcp` npm package): always up to date. Your MCP config runs it as `npx -y @agentkey/mcp`, which re-resolves to the latest published version every time your agent restarts. You never have to touch this.
+- **MCP server**: hosted at `https://api.agentkey.app/v1/mcp`. Your MCP config just points to that URL with your `Authorization` header, so the server side is always current — there's nothing on your machine to upgrade.
 
 - **Skill files** (`SKILL.md` + helpers): how this updates depends on your client.
 
@@ -320,9 +320,9 @@ MCP auto-configuration covers **Claude Code**, **Claude Desktop**, and **Cursor*
 {
   "mcpServers": {
     "agentkey": {
-      "command": "npx",
-      "args": ["-y", "@agentkey/mcp"],
-      "env": { "AGENTKEY_API_KEY": "ak_..." }
+      "type": "http",
+      "url": "https://api.agentkey.app/v1/mcp",
+      "headers": { "Authorization": "Bearer ak_..." }
     }
   }
 }
@@ -350,7 +350,7 @@ npx -y @agentkey/cli --auth-login
 
 `npx skills add .` accepts a local path (or a `file://` URL) — run it again after each edit to `skills/agentkey/SKILL.md`. The MCP step only needs to run once per machine.
 
-**Iterating on the MCP server itself?** Point the MCP config's `command` at `node /path/to/AgentKey-Server/mcp-server/dist/index.js`, then `pnpm --filter @agentkey/mcp build` in the server repo between iterations.
+**Iterating on the MCP server itself?** The server is hosted at `https://api.agentkey.app/v1/mcp`. Point your MCP config's `url` at your own local server (e.g. `http://localhost:8787/v1/mcp`) and follow the `AgentKey-Server` repo's README for how to run it locally.
 
 **Claude Code plugin mode** — add the repo as a local marketplace:
 
