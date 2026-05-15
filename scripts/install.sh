@@ -108,7 +108,6 @@ Options:
                       do NOT auto-open a local browser. Use this when running over
                       SSH, in Docker, or via OpenClaw / Claude Code remote channels.
   --local             Force local mode (auto-open browser) and bypass remote heuristics
-  --force-mcp         Re-run MCP auth even if AgentKey is already configured
   --skip-skill        Skip the skill install step (only run MCP auth)
   --skip-mcp          Skip the MCP auth step (only install the skill)
   --no-telemetry      Disable anonymous usage telemetry (writes
@@ -193,24 +192,6 @@ detect_remote() {
     return 1
 }
 
-# Cheap "is AgentKey already configured?" check across known MCP config files.
-# Greps for an agentkey block + a non-empty AGENTKEY_API_KEY of the expected
-# shape. Returns 0 if at least one config has both.
-already_authed() {
-    local cfg
-    for cfg in "$HOME/.claude.json" \
-               "$HOME/.cursor/mcp.json" \
-               "$HOME/Library/Application Support/Claude/claude_desktop_config.json" \
-               "$HOME/.config/Claude/claude_desktop_config.json"; do
-        [ -f "$cfg" ] || continue
-        if grep -q '"agentkey"' "$cfg" 2>/dev/null \
-           && grep -qE '"AGENTKEY_API_KEY"[^"]*"ak_[A-Za-z0-9_-]+"' "$cfg" 2>/dev/null; then
-            return 0
-        fi
-    done
-    return 1
-}
-
 install_node() {
     local platform="$1"
     ui_info "Installing Node.js v$NODE_MIN_MAJOR+ ..."
@@ -272,7 +253,6 @@ main() {
     local PRINT_HELP=false
     local LIST_AGENTS=false
     local ALL_AGENTS=false
-    local FORCE_MCP=false
     # FORCE_REMOTE / FORCE_LOCAL are read by detect_remote(). Declared as
     # plain (non-`local`) so the helpers see them — they're dynamic-scope
     # accessible either way in bash, but explicit assignment here keeps
@@ -295,7 +275,6 @@ main() {
             --list-agents)     LIST_AGENTS=true; shift ;;
             --remote)          FORCE_REMOTE=true; shift ;;
             --local)           FORCE_LOCAL=true; shift ;;
-            --force-mcp)       FORCE_MCP=true; shift ;;
             --skip-skill)      SKIP_SKILL=true; shift ;;
             --skip-mcp)        SKIP_MCP=true; shift ;;
             --no-telemetry)    NO_TELEMETRY=true; shift ;;
@@ -481,13 +460,13 @@ main() {
     fi
 
     # ── 3. MCP authentication ────────────────────────────────────────────
+    # Always run auth-login. The CLI itself decides whether the existing
+    # token can be reused or a fresh device-code flow is needed — the
+    # installer no longer second-guesses by sniffing config files (which
+    # produced false positives across the stdio → HTTP schema change).
     if $SKIP_MCP; then
         ui_step "3. Register the MCP server"
         ui_muted "Skipped (--skip-mcp)"
-    elif already_authed && ! $FORCE_MCP; then
-        ui_step "3. Register the MCP server"
-        ui_ok "AgentKey is already configured in an MCP client config — skipping auth."
-        ui_muted "Re-run with --force-mcp to authenticate again."
     else
         # Decide local-vs-remote and route the MCP CLI flags accordingly.
         local IS_REMOTE=false

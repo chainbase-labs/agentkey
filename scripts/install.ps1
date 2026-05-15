@@ -26,7 +26,6 @@ param(
     [switch]$ListAgents,
     [switch]$Remote,
     [switch]$Local,
-    [switch]$ForceMcp,
     [switch]$SkipSkill,
     [switch]$SkipMcp,
     [switch]$NoTelemetry,
@@ -120,24 +119,6 @@ function Test-RemoteInstall {
     return $false
 }
 
-# Cheap "is AgentKey already configured?" check across known MCP config files.
-function Test-AlreadyAuthed {
-    $configs = @(
-        "$env:USERPROFILE\.claude.json",
-        "$env:USERPROFILE\.cursor\mcp.json",
-        "$env:APPDATA\Claude\claude_desktop_config.json"
-    )
-    foreach ($cfg in $configs) {
-        if (-not (Test-Path -LiteralPath $cfg)) { continue }
-        $content = Get-Content -Raw -LiteralPath $cfg -ErrorAction SilentlyContinue
-        if (-not $content) { continue }
-        if ($content -match '"agentkey"' -and $content -match '"AGENTKEY_API_KEY"\s*:\s*"ak_[A-Za-z0-9_-]+"') {
-            return $true
-        }
-    }
-    return $false
-}
-
 # ── Help ──────────────────────────────────────────────────────────────────
 if ($Help) {
     @'
@@ -158,7 +139,6 @@ Parameters:
                     SSH, in WinRM, in a container, or via OpenClaw / Claude Code
                     remote channels.
   -Local            Force local mode (auto-open browser) and bypass remote heuristics
-  -ForceMcp         Re-run MCP auth even if AgentKey is already configured
   -SkipSkill        Skip the skill install step (only run MCP auth)
   -SkipMcp          Skip the MCP auth step (only install the skill)
   -NoTelemetry      Disable anonymous usage telemetry (writes
@@ -347,13 +327,13 @@ if (-not $SkipSkill) {
 }
 
 # ── 3. MCP authentication ────────────────────────────────────────────────
+# Always run auth-login. The CLI itself decides whether the existing token
+# can be reused or a fresh device-code flow is needed — the installer no
+# longer second-guesses by sniffing config files (which produced false
+# positives across the stdio → HTTP schema change).
 if ($SkipMcp) {
     Write-Step '3. Register the MCP server'
     Write-Muted 'Skipped (-SkipMcp)'
-} elseif ((Test-AlreadyAuthed) -and -not $ForceMcp) {
-    Write-Step '3. Register the MCP server'
-    Write-Ok 'AgentKey is already configured in an MCP client config — skipping auth.'
-    Write-Muted 'Re-run with -ForceMcp to authenticate again.'
 } else {
     $isRemote = Test-RemoteInstall
     $authArgs = @('--auth-login')
