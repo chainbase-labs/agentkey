@@ -265,12 +265,9 @@ curl -fsSL https://agentkey.app/install.sh | bash -s -- --all-agents
 # 只装 Skill 或只做 MCP 授权
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-mcp
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-skill
-
-# 即使本机已经配置过 AgentKey 也强制重新走一次授权
-curl -fsSL https://agentkey.app/install.sh | bash -s -- --force-mcp
 ```
 
-PowerShell 对应参数：`-Yes`、`-ListAgents`、`-Only`、`-AllAgents`、`-SkipMcp`、`-SkipSkill`、`-ForceMcp`。
+PowerShell 对应参数：`-Yes`、`-ListAgents`、`-Only`、`-AllAgents`、`-SkipMcp`、`-SkipSkill`。
 
 **手动两步安装**（想自己跑两条底层命令，或一键脚本在你的环境里跑不起来）：
 

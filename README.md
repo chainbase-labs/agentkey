@@ -265,12 +265,9 @@ curl -fsSL https://agentkey.app/install.sh | bash -s -- --all-agents
 # Only the skill, or only the MCP auth
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-mcp
 curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-skill
-
-# Re-authenticate even if AgentKey is already configured locally
-curl -fsSL https://agentkey.app/install.sh | bash -s -- --force-mcp
 ```
 
-PowerShell equivalents: `-Yes`, `-ListAgents`, `-Only`, `-AllAgents`, `-SkipMcp`, `-SkipSkill`, `-ForceMcp`.
+PowerShell equivalents: `-Yes`, `-ListAgents`, `-Only`, `-AllAgents`, `-SkipMcp`, `-SkipSkill`.
 
 **Manual two-step install** (if you'd rather run the two underlying commands yourself, or the one-line installer can't reach your machine):
 
