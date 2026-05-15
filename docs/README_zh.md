@@ -187,7 +187,7 @@ npx skills add chainbase-labs/agentkey@v1.0.0
 
 注意：`npx skills update` 只写 `~/.agents/skills/agentkey` 和 `~/.claude/skills/agentkey` 这两个目录，是 Claude Code 读取的位置。**Claude Desktop 读的是自己的 sandbox 路径**，`npx skills update` 碰不到——Desktop 升级要用上面的破冰命令。
 
-只有在需要换 API Key 时才需要再跑一次 `npx -y @agentkey/mcp --auth-login`。
+只有在需要换 API Key 时才需要再跑一次 `npx -y @agentkey/cli --auth-login`。
 
 </details>
 
@@ -279,7 +279,7 @@ PowerShell 对应参数：`-Yes`、`-ListAgents`、`-Only`、`-AllAgents`、`-Sk
 npx skills add chainbase-labs/agentkey
 
 # 2. 浏览器授权并注册 MCP Server
-npx -y @agentkey/mcp --auth-login
+npx -y @agentkey/cli --auth-login
 ```
 
 </details>
@@ -307,7 +307,7 @@ curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
 
 PowerShell：`-Remote` / `-Local`。
 
-如果完全不想走 URL/二维码流程、想自己手动粘 Key，可以用 `npx -y @agentkey/mcp --setup` —— 交互式向导，问你要 Key 并让你勾选要写入的 MCP 客户端。
+如果完全不想走 URL/二维码流程、想自己手动粘 Key，可以用 `npx -y @agentkey/cli --setup` —— 交互式向导，问你要 Key 并让你勾选要写入的 MCP 客户端。
 
 </details>
 
@@ -345,7 +345,7 @@ cd agentkey
 npx skills add .
 
 # 2. 注册 MCP Server（只需一次）
-npx -y @agentkey/mcp --auth-login
+npx -y @agentkey/cli --auth-login
 ```
 
 `npx skills add .` 支持本地路径（也支持 `file://` URL），改完 `skills/agentkey/SKILL.md` 再跑一次就能立刻生效，是日常迭代最快的路径。MCP 注册步骤每台机器只需一次。

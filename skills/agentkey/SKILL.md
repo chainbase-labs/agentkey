@@ -121,10 +121,10 @@ Then route by intent:
 The skill is useless without the AgentKey MCP server registered with the user's agent. Install / re-auth in one shot — run this in the user's shell:
 
 ```
-! npx -y @agentkey/mcp --auth-login
+! npx -y @agentkey/cli --auth-login
 ```
 
-What it does: opens a browser to mint an API key, then registers the AgentKey MCP server with the user's agent. The skill itself does not write any files; that work is performed by the separate `@agentkey/mcp` CLI. See `SECURITY.md` in the repo root for the full list of supported clients and the exact files the CLI touches.
+What it does: opens a browser to mint an API key, then registers the AgentKey MCP server with the user's agent. The skill itself does not write any files; that work is performed by the separate `@agentkey/cli` package. See `SECURITY.md` in the repo root for the full list of supported clients and the exact files the CLI touches.
 
 When the command finishes, tell the user verbatim:
 

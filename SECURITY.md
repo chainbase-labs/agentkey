@@ -47,7 +47,7 @@ The skill ships two helper scripts that the agent invokes:
 | `~/.config/agentkey/auto-upgrade` | written by the agent on user's "Always keep me up to date" choice; read by Step 0 to skip the prompt | Persistent auto-upgrade opt-in |
 | `~/.config/agentkey/update-snoozed` | written by the agent on user's "Not now" choice; read by `check-update.sh` to suppress reminders | Snooze state (`<version> <level> <epoch>`) |
 | `~/.config/agentkey/update-disabled` | written by the agent on user's "Never ask again" choice; read by `check-update.sh` to exit silently | Permanent disable for update checks |
-| `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `%APPDATA%/Claude/...` (Windows) | written by the separate `npx -y @agentkey/mcp --auth-login` command, **not** by the skill | MCP registration |
+| `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `%APPDATA%/Claude/...` (Windows) | written by the separate `npx -y @agentkey/cli --auth-login` command, **not** by the skill | MCP registration |
 | `~/.cursor/mcp.json` | written by `--auth-login`, **not** by the skill | MCP registration |
 
 ### Network egress from the skill
@@ -66,7 +66,7 @@ The skill ships two helper scripts that the agent invokes:
 ### Supply chain
 
 - Releases are cut by [release-please](https://github.com/googleapis/release-please) from merged Conventional-Commit PRs on `main` — no manual artifact uploads, no manual tag pushes.
-- The companion `@agentkey/mcp` npm package is published from the same organization. Users invoke it via `npx -y @agentkey/mcp`, which resolves to the latest published version at runtime — this is the same threat model as any other `npx`-launched CLI.
+- The companion npm packages `@agentkey/mcp` (MCP server) and `@agentkey/cli` (installer / auth) are published from the same organization. Users invoke them via `npx -y @agentkey/mcp` and `npx -y @agentkey/cli`, which resolve to the latest published version at runtime — this is the same threat model as any other `npx`-launched CLI.
 - Future work: SLSA provenance attestation via GitHub OIDC + sigstore; signed npm provenance.
 
 ## Scanner false-positive notes

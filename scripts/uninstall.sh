@@ -293,16 +293,19 @@ $md_changed || skipped "No removable AgentKey section in CLAUDE.md"
 step "7. npm / npx caches"
 
 if command -v npm >/dev/null 2>&1; then
-    if npm list -g --depth=0 2>/dev/null | grep -q "@agentkey/mcp"; then
-        info "Uninstalling global @agentkey/mcp ..."
-        if npm uninstall -g @agentkey/mcp >/dev/null 2>&1; then
-            ok "Removed @agentkey/mcp"
+    GLOBAL_LIST=$(npm list -g --depth=0 2>/dev/null || true)
+    for PKG in "@agentkey/cli" "@agentkey/mcp"; do
+        if echo "$GLOBAL_LIST" | grep -q "$PKG"; then
+            info "Uninstalling global $PKG ..."
+            if npm uninstall -g "$PKG" >/dev/null 2>&1; then
+                ok "Removed $PKG"
+            else
+                warn "Could not remove $PKG — try: npm uninstall -g $PKG"
+            fi
         else
-            warn "Could not remove @agentkey/mcp — try: npm uninstall -g @agentkey/mcp"
+            skipped "Global $PKG not installed"
         fi
-    else
-        skipped "Global @agentkey/mcp not installed"
-    fi
+    done
 else
     skipped "npm not on PATH"
 fi

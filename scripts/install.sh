@@ -18,7 +18,7 @@ set -euo pipefail
 
 # ── Constants ─────────────────────────────────────────────────────────────
 SKILL_REPO="chainbase-labs/agentkey"
-MCP_PACKAGE="@agentkey/mcp"
+CLI_PACKAGE="@agentkey/cli"
 NODE_MIN_MAJOR=18
 
 # ── Agent markers ─────────────────────────────────────────────────────────
@@ -471,9 +471,9 @@ main() {
         fi
         echo
 
-        if ! npx -y "$MCP_PACKAGE" "${AUTH_ARGS[@]}"; then
+        if ! npx -y "$CLI_PACKAGE" "${AUTH_ARGS[@]}"; then
             ui_error "MCP auth failed."
-            ui_muted "Retry manually:  npx -y $MCP_PACKAGE ${AUTH_ARGS[*]}"
+            ui_muted "Retry manually:  npx -y $CLI_PACKAGE ${AUTH_ARGS[*]}"
             exit 1
         fi
         ui_ok "MCP server registered"

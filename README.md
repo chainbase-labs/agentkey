@@ -187,7 +187,7 @@ npx skills add chainbase-labs/agentkey@v1.0.0
 
 Note: `npx skills update` writes to `~/.agents/skills/agentkey` and `~/.claude/skills/agentkey`, which is where Claude Code reads from. **Claude Desktop reads from its own sandbox path** and is not touched by `npx skills update` — use the Desktop bootstrap command above for Desktop.
 
-Re-run `npx -y @agentkey/mcp --auth-login` only when you want to rotate your API key.
+Re-run `npx -y @agentkey/cli --auth-login` only when you want to rotate your API key.
 
 </details>
 
@@ -279,7 +279,7 @@ PowerShell equivalents: `-Yes`, `-ListAgents`, `-Only`, `-AllAgents`, `-SkipMcp`
 npx skills add chainbase-labs/agentkey
 
 # 2. Authenticate and register the MCP server
-npx -y @agentkey/mcp --auth-login
+npx -y @agentkey/cli --auth-login
 ```
 
 </details>
@@ -307,7 +307,7 @@ curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
 
 PowerShell: `-Remote` / `-Local`.
 
-If you'd rather skip the URL/QR flow entirely and type a key manually, `npx -y @agentkey/mcp --setup` opens an interactive wizard that asks for the key and lets you pick which MCP clients to write to.
+If you'd rather skip the URL/QR flow entirely and type a key manually, `npx -y @agentkey/cli --setup` opens an interactive wizard that asks for the key and lets you pick which MCP clients to write to.
 
 </details>
 
@@ -345,7 +345,7 @@ cd agentkey
 npx skills add .
 
 # 2. Register the MCP server (if you haven't already)
-npx -y @agentkey/mcp --auth-login
+npx -y @agentkey/cli --auth-login
 ```
 
 `npx skills add .` accepts a local path (or a `file://` URL) — run it again after each edit to `skills/agentkey/SKILL.md`. The MCP step only needs to run once per machine.
