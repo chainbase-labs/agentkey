@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0](https://github.com/chainbase-labs/Agentkey/compare/v1.6.1...v1.7.0) (2026-05-15)
+
+
+### Features
+
+* rename @agentkey/mcp → @agentkey/cli in install scripts and docs ([#47](https://github.com/chainbase-labs/Agentkey/issues/47)) ([ab0dba7](https://github.com/chainbase-labs/Agentkey/commit/ab0dba7eb1d085c5b0ce118338d70a6390a315fd))
+
 ## [1.6.1](https://github.com/chainbase-labs/Agentkey/compare/v1.6.0...v1.6.1) (2026-05-14)
 
 
