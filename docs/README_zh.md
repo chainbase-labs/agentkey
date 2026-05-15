@@ -299,32 +299,7 @@ npx skills add chainbase-labs/agentkey
 npx -y @agentkey/cli --auth-login
 ```
 
-</details>
-
-<details>
-<summary><b>在 SSH / Docker / OpenClaw 远程通道里安装</b></summary>
-
-如果安装命令是在你看不到屏幕的机器上跑（远程 SSH 服务器、Docker 容器、由手机触发的 OpenClaw 运行时），默认 `--auth-login` 会在远端"成功"打开一个你看不见的浏览器，然后你只能盯着 "Waiting for authorization..." 卡死。
-
-安装器会自动识别这种场景，切换到"扫码授权"流程：终端里直接打印授权 URL 加二维码，不再尝试本地开浏览器。**触发条件**（任一命中即判定为远程）：
-
-- `~/.openclaw/` 目录存在（OpenClaw 运行时）
-- `$SSH_CONNECTION` / `$SSH_TTY` 已设置
-- Linux 且无 `$DISPLAY` / `$WAYLAND_DISPLAY`
-
-需要强制其中一种模式：
-
-```bash
-# 强制远程模式（URL + 二维码，不开浏览器）
-curl -fsSL https://agentkey.app/install.sh | bash -s -- --remote
-
-# 强制本地模式（自动开浏览器，无视启发式判断）
-curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
-```
-
-PowerShell：`-Remote` / `-Local`。
-
-如果完全不想走 URL/二维码流程、想自己手动粘 Key，可以用 `npx -y @agentkey/cli --setup` —— 交互式向导，问你要 Key 并让你勾选要写入的 MCP 客户端。
+**没 GUI / SSH / Docker？** 授权步骤会**同时**尝试开浏览器并把 URL 打印到终端 —— 在没法弹浏览器的机器上，直接把打印出来的 URL 复制到任何能开浏览器的设备完成授权即可。如果完全不想走 URL 跳转、想自己手动粘 Key，可以用 `npx -y @agentkey/cli --setup` 走交互式向导。
 
 </details>
 

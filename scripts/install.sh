@@ -5,7 +5,6 @@
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --yes
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --interactive
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --only claude-code,cursor
-#        curl -fsSL https://agentkey.app/install.sh | bash -s -- --remote
 #        curl -fsSL https://agentkey.app/install.sh | bash -s -- --skip-mcp
 #
 # The whole procedural body is wrapped in `main()` so that under `curl | bash`
@@ -104,10 +103,6 @@ Options:
   --only <a,b,c>      Only install skill for these agents (comma-separated, e.g. claude-code,cursor)
   --all-agents        Skip auto-detection; let 'skills' CLI install for every detected agent
   --list-agents       Print the agents we'd auto-select on this machine and exit
-  --remote            Force remote-install mode: print URL + QR for the auth step,
-                      do NOT auto-open a local browser. Use this when running over
-                      SSH, in Docker, or via OpenClaw / Claude Code remote channels.
-  --local             Force local mode (auto-open browser) and bypass remote heuristics
   --skip-skill        Skip the skill install step (only run MCP auth)
   --skip-mcp          Skip the MCP auth step (only install the skill)
   --no-telemetry      Disable anonymous usage telemetry (writes
@@ -118,13 +113,13 @@ Options:
 Behavior:
   Interactive mode is the default when a terminal is reachable; otherwise it
   falls back to --yes. The installer auto-detects which AI agents are on this
-  machine and pre-selects them for skill installation. Remote-install mode is
-  auto-detected from \$HOME/.openclaw, SSH env vars, and missing \$DISPLAY;
-  override with --remote / --local.
+  machine and pre-selects them for skill installation. The auth step always
+  attempts to open a browser and also prints the URL — so SSH / Docker /
+  OpenClaw users can copy the URL to any device with a browser.
 EOF
 }
 
-# ── Helpers: agent + remote detection ─────────────────────────────────────
+# ── Helpers: agent detection ──────────────────────────────────────────────
 
 # Expand a leading "~" to \$HOME (no glob expansion, no eval).
 _expand_path() {
@@ -163,33 +158,6 @@ detect_agents() {
     if [ ${#hits[@]} -gt 0 ]; then
         printf '%s\n' "${hits[@]}" | sort -u | paste -sd, -
     fi
-}
-
-# Detect "remote install" — a context where auto-opening a browser on this
-# host is futile because the user isn't sitting in front of it. Mutates
-# nothing; returns 0 (true) for remote, 1 (false) for local.
-detect_remote() {
-    [ "$FORCE_LOCAL" = true ]  && return 1
-    [ "$FORCE_REMOTE" = true ] && return 0
-
-    # OpenClaw runtime — the project owner confirms ~/.openclaw exists in
-    # any host where OpenClaw is installed/active. Most reliable single
-    # signal because it doesn't depend on env-var inheritance through the
-    # docker → channel → shell chain.
-    [ -d "$HOME/.openclaw" ] && return 0
-
-    # Generic SSH session.
-    [ -n "${SSH_CONNECTION:-}" ] && return 0
-    [ -n "${SSH_TTY:-}" ]        && return 0
-
-    # Headless Linux (no GUI session).
-    if [ "$(uname -s)" = "Linux" ] \
-       && [ -z "${DISPLAY:-}" ] \
-       && [ -z "${WAYLAND_DISPLAY:-}" ]; then
-        return 0
-    fi
-
-    return 1
 }
 
 install_node() {
@@ -253,12 +221,6 @@ main() {
     local PRINT_HELP=false
     local LIST_AGENTS=false
     local ALL_AGENTS=false
-    # FORCE_REMOTE / FORCE_LOCAL are read by detect_remote(). Declared as
-    # plain (non-`local`) so the helpers see them — they're dynamic-scope
-    # accessible either way in bash, but explicit assignment here keeps
-    # `set -u` happy.
-    FORCE_REMOTE=false
-    FORCE_LOCAL=false
     local NO_TELEMETRY=false
 
     # Snapshot original args before the parse loop shifts them away — needed
@@ -273,8 +235,6 @@ main() {
             --only=*)          ONLY_AGENTS="${1#*=}"; shift ;;
             --all-agents)      ALL_AGENTS=true; shift ;;
             --list-agents)     LIST_AGENTS=true; shift ;;
-            --remote)          FORCE_REMOTE=true; shift ;;
-            --local)           FORCE_LOCAL=true; shift ;;
             --skip-skill)      SKIP_SKILL=true; shift ;;
             --skip-mcp)        SKIP_MCP=true; shift ;;
             --no-telemetry)    NO_TELEMETRY=true; shift ;;
@@ -284,9 +244,6 @@ main() {
     done
 
     if $PRINT_HELP; then print_help; exit 0; fi
-    if $FORCE_REMOTE && $FORCE_LOCAL; then
-        die "--remote and --local are mutually exclusive"
-    fi
 
     if $LIST_AGENTS; then
         local detected
@@ -468,28 +425,9 @@ main() {
         ui_step "3. Register the MCP server"
         ui_muted "Skipped (--skip-mcp)"
     else
-        # Decide local-vs-remote and route the MCP CLI flags accordingly.
-        local IS_REMOTE=false
-        if detect_remote; then IS_REMOTE=true; fi
-
-        local AUTH_ARGS=(--auth-login)
-        if $IS_REMOTE; then
-            ui_step "3. Register the MCP server (remote auth: scan QR with phone)"
-            ui_info "Detected remote install context — printing QR + URL instead of opening a browser here."
-            if [ -d "$HOME/.openclaw" ]; then
-                ui_muted "  reason: \$HOME/.openclaw exists (OpenClaw runtime)"
-            elif [ -n "${SSH_CONNECTION:-}" ] || [ -n "${SSH_TTY:-}" ]; then
-                ui_muted "  reason: SSH session detected"
-            elif [ "$(uname -s)" = "Linux" ]; then
-                ui_muted "  reason: Linux without \$DISPLAY / \$WAYLAND_DISPLAY"
-            fi
-            ui_muted "Override with --local if you want a browser opened on this machine instead."
-            AUTH_ARGS+=(--no-browser)
-        else
-            ui_step "3. Register the MCP server (browser login)"
-            ui_info "Opening your browser for AgentKey device authentication ..."
-            ui_muted "When auth finishes, the MCP server is written into Claude Code / Claude Desktop / Cursor configs."
-        fi
+        ui_step "3. Register the MCP server"
+        ui_info "Opening your browser for AgentKey device authentication ..."
+        ui_muted "If a browser doesn't open (SSH / Docker / headless), the auth URL is also printed below — open it on any device to finish."
         echo
 
         # Telemetry context for `install_completed`. Opt-out is honored at
@@ -513,9 +451,9 @@ main() {
             export AGENTKEY_DEVICE_FINGERPRINT="$(compute_device_fingerprint "$PLATFORM")"
         fi
 
-        if ! npx -y "$CLI_PACKAGE" "${AUTH_ARGS[@]}"; then
+        if ! npx -y "$CLI_PACKAGE" --auth-login; then
             ui_error "MCP auth failed."
-            ui_muted "Retry manually:  npx -y $CLI_PACKAGE ${AUTH_ARGS[*]}"
+            ui_muted "Retry manually:  npx -y $CLI_PACKAGE --auth-login"
             exit 1
         fi
         ui_ok "MCP server registered"

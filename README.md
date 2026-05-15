@@ -299,32 +299,7 @@ npx skills add chainbase-labs/agentkey
 npx -y @agentkey/cli --auth-login
 ```
 
-</details>
-
-<details>
-<summary><b>Installing over SSH, inside Docker, or via OpenClaw / Claude Code remote channels</b></summary>
-
-When the installer runs on a machine you can't see (an SSH server, a Docker container, an OpenClaw runtime triggered from your phone), the default `--auth-login` would silently spawn a browser on the *remote* host — invisible to you.
-
-The installer detects this automatically and switches to a **scan-from-phone** flow: it prints the auth URL plus a terminal QR code, and skips the browser auto-open. Detection signals (any one fires):
-
-- `~/.openclaw/` exists (OpenClaw runtime)
-- `$SSH_CONNECTION` / `$SSH_TTY` set
-- Linux without `$DISPLAY` / `$WAYLAND_DISPLAY`
-
-Force the mode either way:
-
-```bash
-# Force remote mode (URL + QR, no browser)
-curl -fsSL https://agentkey.app/install.sh | bash -s -- --remote
-
-# Force local mode (auto-open browser, ignore heuristics)
-curl -fsSL https://agentkey.app/install.sh | bash -s -- --local
-```
-
-PowerShell: `-Remote` / `-Local`.
-
-If you'd rather skip the URL/QR flow entirely and type a key manually, `npx -y @agentkey/cli --setup` opens an interactive wizard that asks for the key and lets you pick which MCP clients to write to.
+**Headless / SSH / Docker?** The auth step always tries to open a browser **and** prints the URL — so on a machine without a usable display, just copy the printed URL to any device with a browser to finish auth. Prefer typing the key manually? `npx -y @agentkey/cli --setup` opens an interactive wizard instead.
 
 </details>
 
