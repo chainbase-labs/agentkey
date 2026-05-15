@@ -11,10 +11,10 @@
 
     Behavior mirrors install.sh: checks Node >= 18 (installs via winget/scoop/choco),
     auto-detects which AI agents are installed and runs `npx skills add` for them,
-    then `npx @agentkey/cli --auth-login` for device auth. The auth step opens a
-    local browser by default; under SSH / Docker / OpenClaw it switches to a
-    QR + URL flow that the user scans on a phone (`--no-browser` server-side flag).
-    MCP config is written automatically for Claude Code / Claude Desktop / Cursor.
+    then `npx @agentkey/cli --auth-login` for device auth. The auth step always
+    tries to open a local browser AND prints the URL so headless / SSH users can
+    copy it elsewhere. MCP config is written automatically for Claude Code /
+    Claude Desktop / Cursor.
 #>
 
 [CmdletBinding()]
@@ -24,8 +24,6 @@ param(
     [string]$Only,
     [switch]$AllAgents,
     [switch]$ListAgents,
-    [switch]$Remote,
-    [switch]$Local,
     [switch]$SkipSkill,
     [switch]$SkipMcp,
     [switch]$NoTelemetry,
@@ -85,7 +83,7 @@ function Write-Muted($text) { Write-Host "    $text" -ForegroundColor DarkGray }
 
 function Die ($text) { Write-Err $text; exit 1 }
 
-# ── Helpers: agent + remote detection ─────────────────────────────────────
+# ── Helpers: agent detection ──────────────────────────────────────────────
 function Test-AgentMarker {
     param([string]$Marker)
     if ($Marker.StartsWith('cmd:')) {
@@ -107,18 +105,6 @@ function Get-DetectedAgents {
     return @($hits | Sort-Object -Unique)
 }
 
-# Detect "remote install" — context where opening a browser on this host
-# is futile (SSH, Docker, OpenClaw remote channels). Mirrors the bash
-# script's logic.
-function Test-RemoteInstall {
-    if ($script:Local)  { return $false }
-    if ($script:Remote) { return $true }
-
-    if (Test-Path -LiteralPath "$env:USERPROFILE\.openclaw") { return $true }
-    if ($env:SSH_CONNECTION -or $env:SSH_TTY) { return $true }
-    return $false
-}
-
 # ── Help ──────────────────────────────────────────────────────────────────
 if ($Help) {
     @'
@@ -134,11 +120,6 @@ Parameters:
   -Only <a,b,c>     Only install skill for these agents (e.g. "claude-code,cursor")
   -AllAgents        Skip auto-detection; let 'skills' CLI install for every detected agent
   -ListAgents       Print the agents we'd auto-select on this machine and exit
-  -Remote           Force remote-install mode: print URL + QR for the auth step,
-                    do NOT auto-open a local browser. Use this when running over
-                    SSH, in WinRM, in a container, or via OpenClaw / Claude Code
-                    remote channels.
-  -Local            Force local mode (auto-open browser) and bypass remote heuristics
   -SkipSkill        Skip the skill install step (only run MCP auth)
   -SkipMcp          Skip the MCP auth step (only install the skill)
   -NoTelemetry      Disable anonymous usage telemetry (writes
@@ -148,15 +129,11 @@ Parameters:
 
 Behavior:
   The installer auto-detects which AI agents are on this machine and
-  pre-selects them for skill installation. Remote-install mode is auto-
-  detected from %USERPROFILE%\.openclaw and SSH env vars; override with
-  -Remote / -Local.
+  pre-selects them for skill installation. The auth step always tries
+  to open a browser and also prints the URL — so SSH / WinRM / Docker
+  / OpenClaw users can copy the URL to any device with a browser.
 '@
     exit 0
-}
-
-if ($Remote -and $Local) {
-    Die '-Remote and -Local are mutually exclusive.'
 }
 
 if ($ListAgents) {
@@ -335,24 +312,9 @@ if ($SkipMcp) {
     Write-Step '3. Register the MCP server'
     Write-Muted 'Skipped (-SkipMcp)'
 } else {
-    $isRemote = Test-RemoteInstall
-    $authArgs = @('--auth-login')
-
-    if ($isRemote) {
-        Write-Step '3. Register the MCP server (remote auth: scan QR with phone)'
-        Write-Info 'Detected remote install context — printing QR + URL instead of opening a browser here.'
-        if (Test-Path -LiteralPath "$env:USERPROFILE\.openclaw") {
-            Write-Muted '  reason: %USERPROFILE%\.openclaw exists (OpenClaw runtime)'
-        } elseif ($env:SSH_CONNECTION -or $env:SSH_TTY) {
-            Write-Muted '  reason: SSH session detected'
-        }
-        Write-Muted 'Override with -Local if you want a browser opened on this machine instead.'
-        $authArgs += '--no-browser'
-    } else {
-        Write-Step '3. Register the MCP server (browser login)'
-        Write-Info 'Opening your browser for AgentKey device authentication ...'
-        Write-Muted 'When auth finishes, the MCP server is written into Claude Code / Claude Desktop / Cursor configs.'
-    }
+    Write-Step '3. Register the MCP server'
+    Write-Info 'Opening your browser for AgentKey device authentication ...'
+    Write-Muted "If a browser doesn't open (SSH / WinRM / Docker / headless), the auth URL is also printed below — open it on any device to finish."
     Write-Host ''
 
     # Telemetry context for install_completed. Opt-out is honored at the
@@ -383,10 +345,10 @@ if ($SkipMcp) {
         $env:AGENTKEY_DEVICE_FINGERPRINT = $DeviceFingerprint
     }
 
-    & npx -y $CliPackage @authArgs
+    & npx -y $CliPackage --auth-login
     if ($LASTEXITCODE -ne 0) {
         Write-Err 'MCP auth failed.'
-        Write-Muted "Retry manually:  npx -y $CliPackage $($authArgs -join ' ')"
+        Write-Muted "Retry manually:  npx -y $CliPackage --auth-login"
         exit 1
     }
     Write-Ok 'MCP server registered'
