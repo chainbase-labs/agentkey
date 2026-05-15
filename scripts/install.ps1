@@ -11,7 +11,7 @@
 
     Behavior mirrors install.sh: checks Node >= 18 (installs via winget/scoop/choco),
     auto-detects which AI agents are installed and runs `npx skills add` for them,
-    then `npx @agentkey/mcp --auth-login` for device auth. The auth step opens a
+    then `npx @agentkey/cli --auth-login` for device auth. The auth step opens a
     local browser by default; under SSH / Docker / OpenClaw it switches to a
     QR + URL flow that the user scans on a phone (`--no-browser` server-side flag).
     MCP config is written automatically for Claude Code / Claude Desktop / Cursor.
@@ -35,7 +35,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $SkillRepo   = 'chainbase-labs/agentkey'
-$McpPackage  = '@agentkey/mcp'
+$CliPackage  = '@agentkey/cli'
 $NodeMinMajor = 18
 
 # ── Agent markers (mirror of install.sh) ──────────────────────────────────
@@ -378,7 +378,7 @@ if ($SkipMcp) {
     # Telemetry context for install_completed. Opt-out is honored at the
     # SOURCE: when AGENTKEY_TELEMETRY=0, no other context env vars are
     # exported — hostname-derived fingerprint, agent lists, and installer
-    # flags are never computed nor passed to the child `npx @agentkey/mcp`
+    # flags are never computed nor passed to the child `npx @agentkey/cli`
     # process. The server treats AGENTKEY_TELEMETRY=0 as a hard skip.
     if ($NoTelemetry -or (Test-Path -LiteralPath $TelemetryOptOutFile)) {
         $env:AGENTKEY_TELEMETRY = '0'
@@ -403,10 +403,10 @@ if ($SkipMcp) {
         $env:AGENTKEY_DEVICE_FINGERPRINT = $DeviceFingerprint
     }
 
-    & npx -y $McpPackage @authArgs
+    & npx -y $CliPackage @authArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Err 'MCP auth failed.'
-        Write-Muted "Retry manually:  npx -y $McpPackage $($authArgs -join ' ')"
+        Write-Muted "Retry manually:  npx -y $CliPackage $($authArgs -join ' ')"
         exit 1
     }
     Write-Ok 'MCP server registered'

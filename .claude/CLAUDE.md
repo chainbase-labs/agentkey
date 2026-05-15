@@ -9,7 +9,7 @@ AgentKey Skill ships the agent-side half of AgentKey: a single skill that teache
 AgentKey has **two pieces** and a full end-user install is two commands:
 
 1. `npx skills add chainbase-labs/agentkey` — installs **this** skill. It does NOT register the MCP server.
-2. `npx -y @agentkey/mcp --auth-login` — registers the MCP server (`@agentkey/mcp` from `../AgentKey-Server/mcp-server`) and writes the API key into Claude Code, Claude Desktop, and Cursor configs.
+2. `npx -y @agentkey/cli --auth-login` — runs the AgentKey CLI (`@agentkey/cli` from `../AgentKey-Server/cli`). It mints an API key via device-code login and writes a remote-HTTP MCP block (pointing at `https://api.agentkey.app/v1/mcp`) into Claude Code, Claude Desktop, and Cursor configs. The hosted MCP server itself lives at `/v1/mcp` on AgentKey-Server.
 
 The skill is useless without the MCP server; the MCP server works without the skill but the agent won't know to prefer it over built-in web search. Keep this mental model when editing docs — do not let either command drift into claiming it does both.
 
@@ -65,16 +65,16 @@ Releases are driven by [release-please](https://github.com/googleapis/release-pl
 
 **Changes to `.mcp.json`:**
 - Ensure env var name matches `plugin.json` userConfig key via `CLAUDE_PLUGIN_OPTION_` prefix
-- Only matters for the Claude Code plugin path; the Skills-CLI path writes MCP config through `npx @agentkey/mcp --auth-login`
+- Only matters for the Claude Code plugin path; the Skills-CLI path writes MCP config through `npx @agentkey/cli --auth-login`
 
 **Changes to install/uninstall docs:**
 - Update both `README.md` and `docs/README_zh.md` together — they mirror each other
-- The canonical install is always the two-command sequence (`npx skills add …` + `npx -y @agentkey/mcp --auth-login`). Don't imply either command does both.
+- The canonical install is always the two-command sequence (`npx skills add …` + `npx -y @agentkey/cli --auth-login`). Don't imply either command does both.
 - Do **not** re-add OpenClaw / per-agent installers without a new design — historical context is in git history (removed in chore/remove-archive-directory)
 
 ## Architecture Constraints
 
-- Setup mode in SKILL.md runs `! npx -y @agentkey/mcp --auth-login` to authenticate via browser — same command as step 2 of the public install
-- `@agentkey/mcp --auth-login` auto-writes configs for Claude Code, Claude Desktop (mac/win), and Cursor only. Other agents need a manual JSON paste — SKILL.md's "Fallback" section covers this; keep it up to date with any new auto-targets added server-side
-- `.mcp.json` auto-registers the MCP server in Claude Code plugin mode; API key flows from plugin userConfig → `CLAUDE_PLUGIN_OPTION_AGENTKEY_API_KEY` env var (read in `../AgentKey-Server/mcp-server/src/index.ts`)
+- Setup mode in SKILL.md runs `! npx -y @agentkey/cli --auth-login` to authenticate via browser — same command as step 2 of the public install
+- `@agentkey/cli --auth-login` auto-writes configs for Claude Code, Claude Desktop (mac/win), and Cursor only. Other agents need a manual JSON paste — SKILL.md's "Fallback" section covers this; keep it up to date with any new auto-targets added server-side
+- `.mcp.json` registers the remote-HTTP MCP endpoint (`https://api.agentkey.app/v1/mcp`) in Claude Code plugin mode; API key flows from plugin userConfig → `Authorization: Bearer <key>` header (no stdio binary is launched)
 - `README.md` / `docs/README_zh.md` are the public-facing docs; keep them in sync with any structural changes
