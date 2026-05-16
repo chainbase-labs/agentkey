@@ -280,7 +280,7 @@ execute_tool(name="agentkey_scrape", params={url: "https://example.com"})
 
 **Crypto prices:**
 ```
-execute_tool(name="agentkey_crypto", params={type: "cmc_quotes", symbol: "BTC"})
+execute_tool(name="agentkey_crypto", params={type: "market/quotes", params: {symbol: "BTC"}})
 ```
 
 For social/crypto with many endpoints, always discover first:
