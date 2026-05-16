@@ -39,25 +39,44 @@ $NodeMinMajor = 18
 # Subset of vercel-labs/skills' 45 supported agent IDs that have reliable
 # Windows-side markers. Sync source:
 #   https://github.com/vercel-labs/skills (Supported Agents table).
+#
+# IMPORTANT: ids here MUST match the `--only` ids accepted by both
+# `npx skills add -a` and `npx -y @agentkey/cli --auth-login --only`.
+# `claude-desktop` is the documented exception (no skill install path, but
+# MCP config is writable) — it's listed below and used only for MCP --only.
 $AgentMarkers = @(
-    @{ Id = 'claude-code'; Markers = @("path:$env:USERPROFILE\.claude.json", 'cmd:claude', "path:$env:APPDATA\Claude") }
-    @{ Id = 'cursor';      Markers = @("path:$env:USERPROFILE\.cursor", 'cmd:cursor', "path:$env:LOCALAPPDATA\Programs\cursor") }
-    @{ Id = 'codex';       Markers = @("path:$env:USERPROFILE\.codex", 'cmd:codex') }
-    @{ Id = 'gemini-cli';  Markers = @("path:$env:USERPROFILE\.gemini", 'cmd:gemini') }
-    @{ Id = 'opencode';    Markers = @("path:$env:USERPROFILE\.opencode", 'cmd:opencode') }
-    @{ Id = 'openclaw';    Markers = @("path:$env:USERPROFILE\.openclaw") }
-    @{ Id = 'qwen-code';   Markers = @("path:$env:USERPROFILE\.qwen", 'cmd:qwen') }
-    @{ Id = 'iflow-cli';   Markers = @("path:$env:USERPROFILE\.iflow", 'cmd:iflow') }
-    @{ Id = 'windsurf';    Markers = @("path:$env:USERPROFILE\.windsurf", 'cmd:windsurf') }
-    @{ Id = 'warp';        Markers = @("path:$env:USERPROFILE\.warp") }
-    @{ Id = 'amp';         Markers = @('cmd:amp') }
-    @{ Id = 'crush';       Markers = @('cmd:crush') }
-    @{ Id = 'goose';       Markers = @('cmd:goose') }
-    @{ Id = 'droid';       Markers = @('cmd:droid') }
-    @{ Id = 'kode';        Markers = @('cmd:kode') }
-    @{ Id = 'kilo';        Markers = @('cmd:kilo') }
-    @{ Id = 'kimi-cli';    Markers = @("path:$env:USERPROFILE\.kimi", 'cmd:kimi') }
-    @{ Id = 'kiro-cli';    Markers = @("path:$env:USERPROFILE\.kiro", 'cmd:kiro') }
+    @{ Id = 'claude-code';    Markers = @("path:$env:USERPROFILE\.claude.json", 'cmd:claude') }
+    @{ Id = 'claude-desktop'; Markers = @("path:$env:LOCALAPPDATA\AnthropicClaude", "path:$env:APPDATA\Claude\claude_desktop_config.json", "path:$env:APPDATA\Claude") }
+    @{ Id = 'cursor';         Markers = @("path:$env:USERPROFILE\.cursor", 'cmd:cursor', "path:$env:LOCALAPPDATA\Programs\cursor") }
+    @{ Id = 'codex';          Markers = @("path:$env:USERPROFILE\.codex", 'cmd:codex') }
+    @{ Id = 'gemini-cli';     Markers = @("path:$env:USERPROFILE\.gemini", 'cmd:gemini') }
+    @{ Id = 'opencode';       Markers = @("path:$env:APPDATA\opencode", "path:$env:USERPROFILE\.opencode", 'cmd:opencode') }
+    @{ Id = 'openclaw';       Markers = @("path:$env:USERPROFILE\.openclaw", 'cmd:openclaw') }
+    @{ Id = 'qwen-code';      Markers = @("path:$env:USERPROFILE\.qwen", 'cmd:qwen') }
+    @{ Id = 'iflow-cli';      Markers = @("path:$env:USERPROFILE\.iflow", 'cmd:iflow') }
+    @{ Id = 'windsurf';       Markers = @("path:$env:USERPROFILE\.codeium\windsurf", "path:$env:USERPROFILE\.windsurf", 'cmd:windsurf') }
+    @{ Id = 'warp';           Markers = @("path:$env:USERPROFILE\.warp") }
+    @{ Id = 'amp';            Markers = @("path:$env:APPDATA\amp", 'cmd:amp') }
+    @{ Id = 'crush';          Markers = @("path:$env:APPDATA\crush", 'cmd:crush') }
+    @{ Id = 'goose';          Markers = @("path:$env:APPDATA\goose", 'cmd:goose') }
+    @{ Id = 'droid';          Markers = @('cmd:droid') }
+    @{ Id = 'kode';           Markers = @('cmd:kode') }
+    @{ Id = 'kilo';           Markers = @('cmd:kilo') }
+    @{ Id = 'kimi-cli';       Markers = @("path:$env:USERPROFILE\.kimi", 'cmd:kimi') }
+    @{ Id = 'kiro-cli';       Markers = @("path:$env:USERPROFILE\.kiro", 'cmd:kiro') }
+)
+
+# Agent ids that are MCP-only (no skill install path). Never passed to
+# `npx skills add -a`, only to `--auth-login --only`.
+$McpOnlyAgents = @('claude-desktop')
+
+# Agent ids whose MCP registration the installer can drive automatically.
+# Mirror of MCP_AUTO_AGENTS in install.sh and AGENT_REGISTRY in
+# AgentKey-Server/cli/src/lib/mcp-clients.ts. Keep these three in sync.
+$McpAutoAgents = @(
+    'claude-code', 'claude-desktop', 'cursor', 'codex', 'gemini-cli',
+    'opencode', 'qwen-code', 'iflow-cli', 'kimi-cli', 'kiro-cli',
+    'windsurf', 'warp', 'amp', 'crush', 'droid', 'openclaw'
 )
 
 # ── UI helpers ────────────────────────────────────────────────────────────
@@ -232,39 +251,50 @@ if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
     Die 'npx not found after Node install — please reopen your terminal or reinstall Node.js.'
 }
 
+# Resolve target agent list — shared between the skill step and the MCP step.
+# $AllTargets   — every detected agent, including MCP-only ones (claude-desktop)
+# $SkillTargets — $AllTargets minus MCP-only ids (those would fail `skills add`)
+# $McpTargets   — $AllTargets filtered to ids the MCP CLI knows how to write
+$AllTargets = @()
+if ($Only) {
+    $AllTargets = @($Only -split ',' | Where-Object { $_ -ne '' })
+    Write-Info "Targeting agents from -Only: $($AllTargets -join ', ')"
+} elseif ($AllAgents) {
+    Write-Info "Installing for every agent the 'skills' CLI detects (-AllAgents)"
+} else {
+    $AllTargets = @(Get-DetectedAgents)
+    if ($AllTargets.Count -gt 0) {
+        Write-Ok "Detected agents on this host: $($AllTargets -join ', ')"
+        Write-Muted '(override with -Only <ids>, or use -AllAgents)'
+    } else {
+        Write-Info "No agents auto-detected — letting 'skills' CLI scan."
+    }
+}
+
+$SkillTargets = @($AllTargets | Where-Object { $_ -notin $McpOnlyAgents })
+$McpTargets   = @($AllTargets | Where-Object { $_ -in   $McpAutoAgents })
+
 # ── 2. Install the AgentKey skill ─────────────────────────────────────────
-if (-not $SkipSkill) {
+if ($SkipSkill) {
+    Write-Step '2. Install the AgentKey skill'
+    Write-Muted 'Skipped (-SkipSkill)'
+} elseif ($AllTargets.Count -gt 0 -and $SkillTargets.Count -eq 0) {
+    # User explicitly selected only MCP-only ids (e.g. `-Only claude-desktop`).
+    # There's nothing for `skills add` to do — skip the step entirely rather
+    # than fall through to "install for every detected agent."
+    Write-Step '2. Install the AgentKey skill'
+    Write-Muted "Skipped — selected targets ($($AllTargets -join ',')) are MCP-only (no skill install path)."
+} else {
     Write-Step '2. Install the AgentKey skill'
 
-    # Resolve target agent list:
-    #   1. -Only wins (manual override)
-    #   2. else -AllAgents ⇒ no -a (let skills CLI auto-detect everything)
-    #   3. else our auto-detection ⇒ -a <detected list>
-    #   4. else (nothing detected) ⇒ no -a (fall back to skills CLI default)
-    $targets = @()
-    if ($Only) {
-        $targets = $Only -split ',' | Where-Object { $_ -ne '' }
-        Write-Info "Targeting agents from -Only: $($targets -join ', ')"
-    } elseif ($AllAgents) {
-        Write-Info "Installing for every agent the 'skills' CLI detects (-AllAgents)"
-    } else {
-        $targets = Get-DetectedAgents
-        if ($targets.Count -gt 0) {
-            Write-Ok "Detected agents on this host: $($targets -join ', ')"
-            Write-Muted '(override with -Only <ids>, or use -AllAgents)'
-        } else {
-            Write-Info "No agents auto-detected — letting 'skills' CLI scan."
-        }
-    }
-
     $skillsArgs = @('-y', 'skills', 'add', $SkillRepo, '-g')
-    if ($targets.Count -gt 0) {
+    if ($SkillTargets.Count -gt 0) {
         $skillsArgs += '-a'
-        $skillsArgs += $targets
+        $skillsArgs += $SkillTargets
     }
     # Always pass -y in noninteractive mode AND when we already resolved
     # an explicit target list — there's nothing left to ask the user.
-    if ($Mode -eq 'noninteractive' -or $targets.Count -gt 0) {
+    if ($Mode -eq 'noninteractive' -or $AllTargets.Count -gt 0) {
         $skillsArgs += '-y'
     }
 
@@ -272,24 +302,34 @@ if (-not $SkipSkill) {
     if ($LASTEXITCODE -ne 0) { Die "Failed to install skill via 'skills' CLI" }
     # The skills CLI sometimes prints "Installation failed" and still
     # exits 0 (e.g. network error during git clone). Verify the skill
-    # actually landed on disk before declaring success.
+    # actually landed on disk before declaring success. Paths must mirror
+    # the `path:` markers in $AgentMarkers: most agents live under
+    # %USERPROFILE%\.<agent>, but amp / crush / goose / opencode live
+    # under %APPDATA%\<agent>.
     $userHome = [Environment]::GetFolderPath('UserProfile')
     $candidatePaths = @(
-        '.agents\skills\agentkey',
-        '.claude\skills\agentkey',
-        '.cursor\skills\agentkey',
-        '.codex\skills\agentkey',
-        '.gemini\skills\agentkey',
-        '.opencode\skills\agentkey',
-        '.openclaw\skills\agentkey',
-        '.qwen\skills\agentkey',
-        '.iflow\skills\agentkey',
-        '.windsurf\skills\agentkey',
-        '.warp\skills\agentkey'
+        (Join-Path $userHome    '.agents\skills\agentkey'),
+        (Join-Path $userHome    '.claude\skills\agentkey'),
+        (Join-Path $userHome    '.cursor\skills\agentkey'),
+        (Join-Path $userHome    '.codex\skills\agentkey'),
+        (Join-Path $userHome    '.gemini\skills\agentkey'),
+        (Join-Path $userHome    '.opencode\skills\agentkey'),
+        (Join-Path $userHome    '.openclaw\skills\agentkey'),
+        (Join-Path $userHome    '.qwen\skills\agentkey'),
+        (Join-Path $userHome    '.iflow\skills\agentkey'),
+        (Join-Path $userHome    '.windsurf\skills\agentkey'),
+        (Join-Path $userHome    '.warp\skills\agentkey'),
+        (Join-Path $userHome    '.kimi\skills\agentkey'),
+        (Join-Path $userHome    '.kiro\skills\agentkey'),
+        # APPDATA-rooted agents (parity with install.sh's $HOME/.config/<agent>)
+        (Join-Path $env:APPDATA 'amp\skills\agentkey'),
+        (Join-Path $env:APPDATA 'crush\skills\agentkey'),
+        (Join-Path $env:APPDATA 'goose\skills\agentkey'),
+        (Join-Path $env:APPDATA 'opencode\skills\agentkey')
     )
     $agentkeyFound = $false
-    foreach ($rel in $candidatePaths) {
-        if (Test-Path (Join-Path $userHome (Join-Path $rel 'SKILL.md'))) {
+    foreach ($abs in $candidatePaths) {
+        if (Test-Path (Join-Path $abs 'SKILL.md')) {
             $agentkeyFound = $true
             break
         }
@@ -298,9 +338,6 @@ if (-not $SkipSkill) {
         Die "Skill install reported success but no agentkey SKILL.md was created — likely a network or git clone failure. Retry: npx -y skills add $SkillRepo -g -y"
     }
     Write-Ok 'Skill installed'
-} else {
-    Write-Step '2. Install the AgentKey skill'
-    Write-Muted 'Skipped (-SkipSkill)'
 }
 
 # ── 3. MCP authentication ────────────────────────────────────────────────
@@ -311,10 +348,32 @@ if (-not $SkipSkill) {
 if ($SkipMcp) {
     Write-Step '3. Register the MCP server'
     Write-Muted 'Skipped (-SkipMcp)'
+} elseif ($AllTargets.Count -gt 0 -and $McpTargets.Count -eq 0) {
+    # User selected ONLY MCP-incompatible agents (goose / kode / kilo via
+    # -Only). Running auth-login without --only would silently register MCP
+    # in every detected agent, overriding the user's explicit scope. Skip
+    # rather than over-register. See PR #41 B1.
+    Write-Step '3. Register the MCP server'
+    Write-Muted "Skipped — selected agents ($($AllTargets -join ',')) need manual MCP setup (see SKILL.md Fallback section)."
 } else {
+    # Pin MCP registration to the same agent list the skill step targeted.
+    # When McpTargets is empty (auto-detect found nothing), let
+    # `@agentkey/cli` do its own detection — same fallback we use for skill
+    # install. Older CLI versions silently ignore --only, so this is
+    # forward-compatible.
+    $authArgs = @('--auth-login')
+    if ($McpTargets.Count -gt 0) {
+        $authArgs += '--only'
+        $authArgs += ($McpTargets -join ',')
+    }
+
     Write-Step '3. Register the MCP server'
     Write-Info 'Opening your browser for AgentKey device authentication ...'
-    Write-Muted "If a browser doesn't open (SSH / WinRM / Docker / headless), the auth URL is also printed below — open it on any device to finish."
+    if ($McpTargets.Count -gt 0) {
+        Write-Muted "Will register MCP in: $($McpTargets -join ', ')"
+    } else {
+        Write-Muted "If a browser doesn't open (SSH / WinRM / Docker / headless), the auth URL is also printed below — open it on any device to finish."
+    }
     Write-Host ''
 
     # Telemetry context for install_completed. Opt-out is honored at the
@@ -336,19 +395,18 @@ if ($SkipMcp) {
         $DeviceFingerprint = $_hash.Substring(0, 16)
 
         $DetectedAgents = Get-DetectedAgents
-        if (-not (Get-Variable -Name targets -Scope Script -ErrorAction SilentlyContinue)) { $targets = @() }
 
         $env:AGENTKEY_INSTALL_SOURCE     = 'one_liner'
         $env:AGENTKEY_DETECTED_AGENTS    = ($DetectedAgents -join ',')
-        $env:AGENTKEY_SELECTED_AGENTS    = ($targets -join ',')
+        $env:AGENTKEY_SELECTED_AGENTS    = ($AllTargets -join ',')
         $env:AGENTKEY_INSTALLER_FLAGS    = ($PSBoundParameters.Keys | ForEach-Object { "-$_" }) -join ','
         $env:AGENTKEY_DEVICE_FINGERPRINT = $DeviceFingerprint
     }
 
-    & npx -y $CliPackage --auth-login
+    & npx -y $CliPackage @authArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Err 'MCP auth failed.'
-        Write-Muted "Retry manually:  npx -y $CliPackage --auth-login"
+        Write-Muted "Retry manually:  npx -y $CliPackage $($authArgs -join ' ')"
         exit 1
     }
     Write-Ok 'MCP server registered'
